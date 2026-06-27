@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
+import { v4 as uuidv4 } from "uuid";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { ToolManager } from "../managers/toolManager";
+import { TerminalManager } from "../managers/terminalManager";
 import type { ConnectionsManager, Connection } from "../managers/connectionsManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
@@ -44,17 +46,6 @@ type ToolSafeConnection = {
   lastUsedAt?: string;
 };
 
-type TerminalInfo = {
-  id: string;
-  name: string;
-  toolId: string;
-  toolInstanceId?: string | null;
-  shell: string;
-  cwd: string;
-  isVisible: boolean;
-  createdAt: string;
-};
-
 type OpenManagers = {
   connectionsManager?: ConnectionsManager;
   dataverseManager?: DataverseManager;
@@ -84,12 +75,8 @@ export class ToolHostPanel {
   };
 
   private readonly toolSettings = new Map<string, Record<string, unknown>>();
-  private readonly terminalInstances = new Map<
-    string,
-    { terminal: vscode.Terminal; info: TerminalInfo }
-  >();
+  private readonly terminalManager = new TerminalManager();
   private readonly eventHistory: ToolBoxEventPayload[] = [];
-  private terminalCounter = 0;
   private disposables: vscode.Disposable[] = [];
 
   private constructor(
@@ -125,6 +112,18 @@ export class ToolHostPanel {
         })
       );
     }
+
+    this.disposables.push(
+      this.terminalManager.onTerminalOutput(({ terminalId, data }) => {
+        this.pushEvent("terminal:output", { terminalId, data });
+      }),
+      this.terminalManager.onTerminalClosed(({ terminalId }) => {
+        this.pushEvent("terminal:closed", { terminalId });
+      }),
+      this.terminalManager.onTerminalCommandCompleted(({ terminalId, exitCode }) => {
+        this.pushEvent("terminal:command:completed", { terminalId, exitCode });
+      })
+    );
   }
 
   /**
@@ -171,7 +170,7 @@ export class ToolHostPanel {
   dispose(): void {
     ToolHostPanel.currentPanel = undefined;
     this.panel.dispose();
-    this.terminalInstances.forEach(({ terminal }) => terminal.dispose());
+    this.terminalManager.dispose();
     for (const d of this.disposables) {
       d.dispose();
     }
@@ -516,76 +515,34 @@ export class ToolHostPanel {
           env?: Record<string, string>;
           visible?: boolean;
         };
-
-        const id = `terminal-${Date.now()}-${++this.terminalCounter}`;
-        const shellPath = typeof options.shell === "string" ? options.shell : undefined;
-        const terminal = vscode.window.createTerminal({
-          name: options.name ?? "PPTB Terminal",
-          cwd: options.cwd,
-          env: options.env,
-          shellPath,
-        });
-
-        const info: TerminalInfo = {
-          id,
-          name: options.name ?? "PPTB Terminal",
-          toolId: this.toolContext.toolId ?? "unknown-tool",
-          toolInstanceId: this.toolContext.instanceId ?? null,
-          shell: options.shell ?? "default",
-          cwd: options.cwd ?? "",
-          isVisible: options.visible !== false,
-          createdAt: new Date().toISOString(),
-        };
-
-        this.terminalInstances.set(id, { terminal, info });
-        if (info.isVisible) {
-          terminal.show();
-        }
+        const toolId = this.toolContext.toolId ?? "unknown-tool";
+        const toolInstanceId =
+          this.toolContext.instanceId ?? uuidv4();
+        const info = this.terminalManager.create(options, toolId, toolInstanceId);
         this.pushEvent("terminal:created", info);
         return info;
       }
       case "execute": {
         const terminalId = String(args[0]);
         const command = String(args[1] ?? "");
-        const entry = this.terminalInstances.get(terminalId);
-        if (!entry) {
-          throw new Error(`Terminal not found: ${terminalId}`);
-        }
-        entry.terminal.sendText(command, true);
-        return {
-          terminalId,
-          commandId: `${terminalId}:${Date.now()}`,
-        };
+        return this.terminalManager.execute(terminalId, command);
       }
       case "close": {
         const terminalId = String(args[0]);
-        const entry = this.terminalInstances.get(terminalId);
-        if (!entry) {
-          return;
-        }
-        entry.terminal.dispose();
-        this.terminalInstances.delete(terminalId);
-        this.pushEvent("terminal:closed", { terminalId });
+        this.terminalManager.close(terminalId);
         return;
       }
       case "get": {
         const terminalId = String(args[0]);
-        return this.terminalInstances.get(terminalId)?.info;
+        return this.terminalManager.get(terminalId);
       }
       case "list": {
-        return Array.from(this.terminalInstances.values()).map((entry) => entry.info);
+        return this.terminalManager.list();
       }
       case "setVisibility": {
         const terminalId = String(args[0]);
         const visible = Boolean(args[1]);
-        const entry = this.terminalInstances.get(terminalId);
-        if (!entry) {
-          throw new Error(`Terminal not found: ${terminalId}`);
-        }
-        entry.info.isVisible = visible;
-        if (visible) {
-          entry.terminal.show();
-        }
+        this.terminalManager.setVisibility(terminalId, visible);
         return;
       }
       default:
