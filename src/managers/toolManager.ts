@@ -59,8 +59,10 @@ type Manifest = InstalledTool[];
  * ```
  */
 export class ToolManager implements vscode.Disposable {
+  private readonly _onToolsChanged = new vscode.EventEmitter<void>();
+
   /** Fired whenever the set of installed tools changes. */
-  readonly onToolsChanged = new vscode.EventEmitter<void>();
+  readonly onToolsChanged: vscode.Event<void> = this._onToolsChanged.event;
 
   /** Absolute path to the root tools directory. */
   readonly toolsDir: string;
@@ -146,7 +148,7 @@ export class ToolManager implements vscode.Disposable {
     manifest.push(installed);
     this.writeManifest(manifest);
 
-    this.onToolsChanged.fire();
+    this._onToolsChanged.fire();
     return installed;
   }
 
@@ -169,7 +171,7 @@ export class ToolManager implements vscode.Disposable {
     const manifest = this.readManifest().filter((t) => t.id !== id);
     this.writeManifest(manifest);
 
-    this.onToolsChanged.fire();
+    this._onToolsChanged.fire();
   }
 
   // ---------------------------------------------------------------------------
@@ -177,7 +179,7 @@ export class ToolManager implements vscode.Disposable {
   // ---------------------------------------------------------------------------
 
   dispose(): void {
-    this.onToolsChanged.dispose();
+    this._onToolsChanged.dispose();
   }
 
   // ---------------------------------------------------------------------------
@@ -274,13 +276,21 @@ export class ToolManager implements vscode.Disposable {
         });
 
         fileStream.on("error", (err) => {
-          fs.unlink(destPath, () => {/* best-effort cleanup */});
+          fs.unlink(destPath, (unlinkErr) => {
+            if (unlinkErr) {
+              console.error(`Failed to clean up partial download at "${destPath}":`, unlinkErr);
+            }
+          });
           reject(err);
         });
 
         response.on("error", (err) => {
           fileStream.close();
-          fs.unlink(destPath, () => {/* best-effort cleanup */});
+          fs.unlink(destPath, (unlinkErr) => {
+            if (unlinkErr) {
+              console.error(`Failed to clean up partial download at "${destPath}":`, unlinkErr);
+            }
+          });
           reject(err);
         });
       });
