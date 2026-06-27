@@ -6,6 +6,7 @@
 
   const pendingRequests = new Map();
   const eventListeners = new Set();
+  const targetOrigin = window.location.origin;
 
   let requestCounter = 0;
   let cachedContext = window.TOOLBOX_CONTEXT || null;
@@ -48,7 +49,7 @@
           method,
           args,
         },
-        "*"
+        targetOrigin
       );
     });
   }
@@ -591,6 +592,10 @@
   }
 
   window.addEventListener("message", (event) => {
+    if (event.origin !== targetOrigin) {
+      return;
+    }
+
     const message = event.data;
     if (!message || typeof message !== "object" || message.source !== "pptb-host") {
       return;

@@ -654,15 +654,11 @@ export class ToolHostPanel {
       throw new Error(`Unsupported dataverse method: ${method}`);
     }
 
-    const connectionTarget =
-      args.length > 0 && (args[args.length - 1] === "primary" || args[args.length - 1] === "secondary")
-        ? (args[args.length - 1] as "primary" | "secondary")
-        : "primary";
-
-    const trimmedArgs =
-      args.length > 0 && (args[args.length - 1] === "primary" || args[args.length - 1] === "secondary")
-        ? args.slice(0, -1)
-        : args;
+    const hasConnectionTargetArg = this.hasConnectionTargetArg(args);
+    const connectionTarget = hasConnectionTargetArg
+      ? (args[args.length - 1] as "primary" | "secondary")
+      : "primary";
+    const trimmedArgs = hasConnectionTargetArg ? args.slice(0, -1) : args;
 
     const connection = await this.getConnection(connectionTarget);
     if (!connection) {
@@ -673,6 +669,15 @@ export class ToolHostPanel {
       connection,
       ...trimmedArgs,
     ]);
+  }
+
+  private hasConnectionTargetArg(args: unknown[]): boolean {
+    if (args.length === 0) {
+      return false;
+    }
+
+    const lastArg = args[args.length - 1];
+    return lastArg === "primary" || lastArg === "secondary";
   }
 
   private async dispatchPowerPlatform(

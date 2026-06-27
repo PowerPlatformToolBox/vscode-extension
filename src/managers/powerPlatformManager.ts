@@ -160,13 +160,14 @@ export class PowerPlatformManager {
     customHeaders: Record<string, string>
   ): Promise<unknown> {
     const url = this.buildUrl(namespace, relativePath);
+    const authorizationHeader = "Bearer " + accessToken;
 
     const response = await axios.request<unknown>({
       method,
       url,
       data: body,
       headers: {
-        Authorization: ["Bearer", accessToken].join(" "),
+        Authorization: authorizationHeader,
         Accept: "application/json",
         "Content-Type": "application/json; charset=utf-8",
         ...customHeaders,
