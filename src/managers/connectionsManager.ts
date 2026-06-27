@@ -26,6 +26,18 @@ export interface ConnectionPublicFields {
   tenantId?: string;
   createdAt?: string;
   lastUsedAt?: string;
+  /** MSAL account identifier used for silent token re-acquisition (interactive auth only). */
+  msalAccountId?: string;
+  /** ISO-8601 expiry timestamp of the Dataverse access token. */
+  tokenExpiry?: string;
+  /** Whether this connection is also used for Power Platform API (api.powerplatform.com) calls. */
+  enabledForPowerPlatformAPI?: boolean;
+  /** Scopes granted for Power Platform API authentication. */
+  scopesForPowerPlatformAPI?: string[];
+  /** ISO-8601 expiry timestamp of the Power Platform API access token. */
+  powerPlatformTokenExpiry?: string;
+  /** Marks a connection imported from file that is missing required credentials. */
+  hasIncompleteCredentials?: boolean;
 }
 
 /**
@@ -36,6 +48,8 @@ export interface ConnectionSecretFields {
   password?: string;
   accessToken?: string;
   refreshToken?: string;
+  /** Separate access token for Power Platform API (https://api.powerplatform.com scope). */
+  powerPlatformAccessToken?: string;
 }
 
 /**
@@ -43,6 +57,44 @@ export interface ConnectionSecretFields {
  * Extends the public fields with optional sensitive fields (populated on demand).
  */
 export type Connection = ConnectionPublicFields & Partial<ConnectionSecretFields>;
+
+// ---------------------------------------------------------------------------
+// Import / Export types
+// ---------------------------------------------------------------------------
+
+/** A single connection entry within a connection export file. */
+export type ConnectionExportEntry = Omit<
+  ConnectionPublicFields,
+  "msalAccountId" | "tokenExpiry" | "powerPlatformTokenExpiry" | "hasIncompleteCredentials"
+>;
+
+/** Shape of the JSON file produced by `exportConnections`. */
+export interface ConnectionExport {
+  version: 1;
+  exportedAt: string;
+  connections: ConnectionExportEntry[];
+}
+
+/** Result returned by `importConnections`. */
+export interface ConnectionImportResult {
+  imported: number;
+  skipped: number;
+  warnings: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Validation helpers (used by importConnections)
+// ---------------------------------------------------------------------------
+
+const REQUIRED_IMPORT_FIELDS: (keyof ConnectionPublicFields)[] = [
+  "name",
+  "url",
+  "environment",
+  "authType",
+];
+
+const VALID_ENVIRONMENTS = new Set<string>(["Dev", "Test", "UAT", "Production"]);
+const VALID_AUTH_TYPES = new Set<string>(Object.values(AUTH_TYPES));
 
 /**
  * Manages connections — persistence split between globalState (non-sensitive)
@@ -224,6 +276,214 @@ export class ConnectionsManager {
   }
 
   // ---------------------------------------------------------------------------
+  // Import / Export
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The secret fields excluded from connection exports (tokens should never
+   * be written to a portable file).
+   */
+  private static readonly EXPORT_EXCLUDED_SECRET_FIELDS: (keyof ConnectionSecretFields)[] = [
+    "accessToken",
+    "refreshToken",
+    "powerPlatformAccessToken",
+  ];
+
+  /**
+   * The public fields excluded from exports (runtime state that is meaningless
+   * in another environment).
+   */
+  private static readonly EXPORT_EXCLUDED_PUBLIC_FIELDS: (keyof ConnectionPublicFields)[] = [
+    "msalAccountId",
+    "tokenExpiry",
+    "powerPlatformTokenExpiry",
+    "hasIncompleteCredentials",
+  ];
+
+  /**
+   * Export connections to a sanitized JSON structure.
+   * Secrets (access/refresh tokens) and runtime-only state are stripped.
+   *
+   * @param ids When provided, only those connection IDs are exported.
+   *            When omitted, all connections are exported.
+   */
+  exportConnections(ids?: string[]): ConnectionExport {
+    const all = this.getAll();
+    const toExport = ids && ids.length > 0
+      ? all.filter((c) => ids.includes(c.id))
+      : all;
+
+    const sanitized = toExport.map((conn) => {
+      const sanitizedConn = { ...conn } as Partial<Connection>;
+      for (const field of ConnectionsManager.EXPORT_EXCLUDED_PUBLIC_FIELDS) {
+        delete sanitizedConn[field];
+      }
+      for (const field of ConnectionsManager.EXPORT_EXCLUDED_SECRET_FIELDS) {
+        delete sanitizedConn[field];
+      }
+      return sanitizedConn as ConnectionExportEntry;
+    });
+
+    return {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      connections: sanitized,
+    };
+  }
+
+  /**
+   * Import connections from a parsed JSON export payload.
+   * Validates structure; marks connections with missing required secrets as incomplete.
+   *
+   * @throws `Error` when the payload structure is invalid (wrong version, missing array, etc.).
+   * @returns Summary of how many connections were imported, skipped, and any per-entry warnings.
+   */
+  async importConnections(data: unknown): Promise<ConnectionImportResult> {
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("Invalid import file: expected a JSON object.");
+    }
+
+    const payload = data as Record<string, unknown>;
+
+    if (payload.version !== 1) {
+      throw new Error(
+        `Unsupported export version: ${String(payload.version)}. Expected version 1.`
+      );
+    }
+
+    if (!Array.isArray(payload.connections)) {
+      throw new Error("Invalid import file: 'connections' must be an array.");
+    }
+
+    if ((payload.connections as unknown[]).length === 0) {
+      throw new Error("Import file contains no connections.");
+    }
+
+    const existing = this.getAll();
+    const existingIds = new Set(existing.map((c) => c.id));
+
+    let imported = 0;
+    let skipped = 0;
+    const warnings: string[] = [];
+
+    for (const raw of payload.connections as unknown[]) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        skipped++;
+        warnings.push("Skipped an entry that is not a valid object.");
+        continue;
+      }
+
+      const entry = raw as Record<string, unknown>;
+      const connName = typeof entry.name === "string" ? entry.name : "(unknown)";
+
+      // Validate required fields
+      const missingFields: string[] = [];
+      for (const field of REQUIRED_IMPORT_FIELDS) {
+        if (!entry[field] || typeof entry[field] !== "string") {
+          missingFields.push(field);
+        }
+      }
+
+      if (missingFields.length > 0) {
+        skipped++;
+        warnings.push(
+          `Skipped "${connName}": missing required fields: ${missingFields.join(", ")}.`
+        );
+        continue;
+      }
+
+      if (!VALID_ENVIRONMENTS.has(entry.environment as string)) {
+        skipped++;
+        warnings.push(
+          `Skipped "${connName}": invalid environment "${String(entry.environment)}". Must be Dev, Test, UAT, or Production.`
+        );
+        continue;
+      }
+
+      if (!VALID_AUTH_TYPES.has(entry.authType as string)) {
+        skipped++;
+        warnings.push(
+          `Skipped "${connName}": invalid authType "${String(entry.authType)}".`
+        );
+        continue;
+      }
+
+      // Determine if credentials are complete for this auth type
+      const authType = entry.authType as AuthType;
+      let hasIncompleteCredentials = false;
+
+      if (authType === AUTH_TYPES.CLIENT_CREDENTIALS) {
+        if (!entry.clientId || typeof entry.clientId !== "string") {
+          hasIncompleteCredentials = true;
+          warnings.push(`Connection "${connName}" imported with warning: missing clientId.`);
+        }
+        // clientSecret is a secret, not included in exports — always mark incomplete
+        hasIncompleteCredentials = true;
+        warnings.push(
+          `Connection "${connName}" imported with warning: clientSecret must be entered manually.`
+        );
+      } else if (authType === AUTH_TYPES.USERNAME_PASSWORD) {
+        if (!entry.username || typeof entry.username !== "string") {
+          hasIncompleteCredentials = true;
+          warnings.push(`Connection "${connName}" imported with warning: missing username.`);
+        }
+        // password is a secret, not included in exports — always mark incomplete
+        hasIncompleteCredentials = true;
+        warnings.push(
+          `Connection "${connName}" imported with warning: password must be entered manually.`
+        );
+      }
+
+      // Generate a new unique ID when the imported one already exists
+      let newId =
+        typeof entry.id === "string" && entry.id ? entry.id : uuidv4();
+      if (existingIds.has(newId)) {
+        newId = uuidv4();
+      }
+      existingIds.add(newId);
+
+      const newConnection: ConnectionPublicFields = {
+        id: newId,
+        name: entry.name as string,
+        url: entry.url as string,
+        environment: entry.environment as ConnectionPublicFields["environment"],
+        authType: authType,
+        clientId: typeof entry.clientId === "string" ? entry.clientId : undefined,
+        username: typeof entry.username === "string" ? entry.username : undefined,
+        tenantId: typeof entry.tenantId === "string" ? entry.tenantId : undefined,
+        category: typeof entry.category === "string" ? entry.category : undefined,
+        environmentColor:
+          typeof entry.environmentColor === "string"
+            ? entry.environmentColor
+            : undefined,
+        categoryColor:
+          typeof entry.categoryColor === "string"
+            ? entry.categoryColor
+            : undefined,
+        createdAt:
+          typeof entry.createdAt === "string"
+            ? entry.createdAt
+            : new Date().toISOString(),
+        enabledForPowerPlatformAPI:
+          typeof entry.enabledForPowerPlatformAPI === "boolean"
+            ? entry.enabledForPowerPlatformAPI
+            : false,
+        hasIncompleteCredentials,
+      };
+
+      existing.push(newConnection);
+      imported++;
+    }
+
+    if (imported > 0) {
+      await this.context.globalState.update(CONNECTIONS_STATE_KEY, existing);
+      this.onConnectionsChanged.fire();
+    }
+
+    return { imported, skipped, warnings };
+  }
+
+  // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
@@ -251,6 +511,9 @@ export class ConnectionsManager {
         : {}),
       ...(secrets.refreshToken !== undefined
         ? { refreshToken: secrets.refreshToken }
+        : {}),
+      ...(secrets.powerPlatformAccessToken !== undefined
+        ? { powerPlatformAccessToken: secrets.powerPlatformAccessToken }
         : {}),
     };
     // Remove undefined values

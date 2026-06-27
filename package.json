@@ -71,6 +71,18 @@
         "title": "Refresh Connections",
         "category": "PPTB",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "pptb.connections.export",
+        "title": "Export Connections",
+        "category": "PPTB",
+        "icon": "$(export)"
+      },
+      {
+        "command": "pptb.connections.import",
+        "title": "Import Connections",
+        "category": "PPTB",
+        "icon": "$(import)"
       }
     ],
     "menus": {
@@ -90,6 +102,16 @@
           "command": "pptb.connections.refresh",
           "when": "view == pptb.connectionsView",
           "group": "navigation"
+        },
+        {
+          "command": "pptb.connections.export",
+          "when": "view == pptb.connectionsView",
+          "group": "2_importexport@1"
+        },
+        {
+          "command": "pptb.connections.import",
+          "when": "view == pptb.connectionsView",
+          "group": "2_importexport@2"
         }
       ],
       "view/item/context": [

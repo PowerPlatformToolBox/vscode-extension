@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { Connection } from "../managers/connectionsManager";
 import type { ConnectionsManager } from "../managers/connectionsManager";
+import { getNonce } from "../utils/webview";
 
 /**
  * Manages the WebviewPanel that hosts the React connection wizard.
@@ -181,14 +182,4 @@ export class ConnectionPanel {
 </body>
 </html>`;
   }
-}
-
-function getNonce(): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let nonce = "";
-  for (let i = 0; i < 32; i++) {
-    nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return nonce;
 }

@@ -6,6 +6,7 @@ import { TerminalManager } from "../managers/terminalManager";
 import type { ConnectionsManager, Connection } from "../managers/connectionsManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
+import { getNonce } from "../utils/webview";
 
 type ApiMessage = {
   type: string;
@@ -848,14 +849,4 @@ export class ToolHostPanel {
 </body>
 </html>`;
   }
-}
-
-function getNonce(): string {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let nonce = "";
-  for (let i = 0; i < 32; i++) {
-    nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return nonce;
 }
