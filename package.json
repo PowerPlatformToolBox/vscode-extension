@@ -1,0 +1,171 @@
+{
+  "name": "power-platform-toolbox",
+  "displayName": "Power Platform ToolBox",
+  "description": "A VS Code extension for Power Platform ToolBox",
+  "version": "0.1.0",
+  "publisher": "tbd-publisher",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pptb-explorer",
+          "title": "Power Platform ToolBox",
+          "icon": "$(extensions)"
+        }
+      ]
+    },
+    "views": {
+      "pptb-explorer": [
+        {
+          "id": "pptb.connectionsView",
+          "name": "Connections"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pptb.connections.add",
+        "title": "Add Connection",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.edit",
+        "title": "Edit Connection",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.delete",
+        "title": "Delete Connection",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.connect",
+        "title": "Connect",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.disconnect",
+        "title": "Disconnect",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.setActive",
+        "title": "Set Active Connection",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.test",
+        "title": "Test Connection",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.connections.refresh",
+        "title": "Refresh Connections",
+        "category": "PPTB",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "pptb.connections.add",
+          "when": "activeWebviewPanelId == pptb.connectionPanel"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pptb.connections.add",
+          "when": "view == pptb.connectionsView",
+          "group": "navigation"
+        },
+        {
+          "command": "pptb.connections.refresh",
+          "when": "view == pptb.connectionsView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pptb.connections.connect",
+          "when": "view == pptb.connectionsView && viewItem == pptb.connection.inactive",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "pptb.connections.disconnect",
+          "when": "view == pptb.connectionsView && viewItem == pptb.connection.active",
+          "group": "1_connection@1"
+        },
+        {
+          "command": "pptb.connections.edit",
+          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "group": "2_manage@1"
+        },
+        {
+          "command": "pptb.connections.test",
+          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "group": "2_manage@2"
+        },
+        {
+          "command": "pptb.connections.delete",
+          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "group": "3_delete@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Power Platform ToolBox",
+      "properties": {
+        "pptb.supabaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Supabase project URL for PPTB backend services"
+        },
+        "pptb.supabaseAnonKey": {
+          "type": "string",
+          "default": "",
+          "description": "Supabase anonymous key for PPTB backend services"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "pretest": "npm run compile-tests",
+    "lint": "eslint src",
+    "test": "node ./out/test/runTest.js"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^3.8.10",
+    "@pptb/types": "1.2.4-beta.6",
+    "axios": "^1.18.1",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^10.0.0",
+    "@types/vscode": "^1.85.0",
+    "@types/webpack-env": "^1.18.4",
+    "css-loader": "^7.1.2",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.90.1",
+    "webpack-cli": "^5.1.4",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
