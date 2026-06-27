@@ -164,6 +164,59 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  // Export connections
+  const exportCmd = vscode.commands.registerCommand(
+    "pptb.connections.export",
+    async () => {
+      const saveUri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file("pptb-connections.json"),
+        filters: { "JSON files": ["json"] },
+        title: "Export PPTB Connections",
+      });
+      if (!saveUri) {
+        return;
+      }
+      const exported = connectionsManager.exportConnections();
+      const json = JSON.stringify(exported, null, 2);
+      await vscode.workspace.fs.writeFile(saveUri, Buffer.from(json, "utf8"));
+      vscode.window.showInformationMessage(
+        `Exported ${exported.connections.length} connection(s) to ${saveUri.fsPath}`
+      );
+    }
+  );
+
+  // Import connections
+  const importCmd = vscode.commands.registerCommand(
+    "pptb.connections.import",
+    async () => {
+      const [fileUri] = (await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        filters: { "JSON files": ["json"] },
+        title: "Import PPTB Connections",
+      })) ?? [];
+      if (!fileUri) {
+        return;
+      }
+      try {
+        const bytes = await vscode.workspace.fs.readFile(fileUri);
+        const raw = Buffer.from(bytes).toString("utf8");
+        const data: unknown = JSON.parse(raw);
+        const result = await connectionsManager.importConnections(data);
+        const msg = `Imported ${result.imported} connection(s)${result.skipped > 0 ? `, skipped ${result.skipped}` : ""}.`;
+        if (result.warnings.length > 0) {
+          vscode.window.showWarningMessage(`${msg} Warnings: ${result.warnings.join(" ")}`);
+        } else {
+          vscode.window.showInformationMessage(msg);
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Import failed: ${message}`);
+      }
+    }
+  );
+
   // ── Register all disposables ──────────────────────────────────────────────
   context.subscriptions.push(
     authManager,
@@ -177,7 +230,9 @@ export function activate(context: vscode.ExtensionContext): void {
     disconnectCmd,
     setActiveCmd,
     testCmd,
-    refreshCmd
+    refreshCmd,
+    exportCmd,
+    importCmd
   );
 }
 
