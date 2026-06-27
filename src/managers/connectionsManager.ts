@@ -414,7 +414,6 @@ export class ConnectionsManager {
 
       if (authType === AUTH_TYPES.CLIENT_CREDENTIALS) {
         if (!entry.clientId || typeof entry.clientId !== "string") {
-          hasIncompleteCredentials = true;
           warnings.push(`Connection "${connName}" imported with warning: missing clientId.`);
         }
         // clientSecret is a secret, not included in exports — always mark incomplete
@@ -424,7 +423,6 @@ export class ConnectionsManager {
         );
       } else if (authType === AUTH_TYPES.USERNAME_PASSWORD) {
         if (!entry.username || typeof entry.username !== "string") {
-          hasIncompleteCredentials = true;
           warnings.push(`Connection "${connName}" imported with warning: missing username.`);
         }
         // password is a secret, not included in exports — always mark incomplete
