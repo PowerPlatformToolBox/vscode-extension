@@ -180,6 +180,12 @@ export class ConnectionsManager {
     this.onConnectionsChanged.fire();
   }
 
+  /** Clear the active connection. */
+  async clearActiveConnection(): Promise<void> {
+    await this.context.globalState.update(ACTIVE_CONNECTION_KEY, undefined);
+    this.onConnectionsChanged.fire();
+  }
+
   // ---------------------------------------------------------------------------
   // Secrets
   // ---------------------------------------------------------------------------
@@ -199,8 +205,8 @@ export class ConnectionsManager {
   // ---------------------------------------------------------------------------
 
   /**
-   * Test a connection by performing a simple Dataverse query.
-   * Returns true if the query succeeds.
+   * Test a connection by performing a lightweight WhoAmI request.
+   * Returns true if the request succeeds.
    */
   async testConnection(connection: Connection): Promise<boolean> {
     if (!this.dataverseManager) {
@@ -209,7 +215,7 @@ export class ConnectionsManager {
     try {
       await this.dataverseManager.queryData(
         connection,
-        "systemusers?$top=1&$select=fullname"
+        "WhoAmI()"
       );
       return true;
     } catch {

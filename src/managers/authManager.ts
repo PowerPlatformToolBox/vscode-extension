@@ -80,7 +80,7 @@ function getAvailablePort(): Promise<number> {
  * Manages MSAL-based authentication for Dataverse connections.
  * Supports Interactive Browser, Client Credentials, and Username/Password flows.
  */
-export class AuthManager {
+export class AuthManager implements vscode.Disposable {
   private readonly cacheFilePath: string;
 
   constructor(context: vscode.ExtensionContext) {
@@ -142,6 +142,13 @@ export class AuthManager {
     if (fs.existsSync(this.cacheFilePath)) {
       fs.unlinkSync(this.cacheFilePath);
     }
+  }
+
+  /**
+   * Dispose resources (satisfies vscode.Disposable).
+   */
+  dispose(): void {
+    // No long-lived resources to release; cache is file-based.
   }
 
   // ---------------------------------------------------------------------------

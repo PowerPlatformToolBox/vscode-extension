@@ -108,23 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showInformationMessage("No active connection.");
         return;
       }
-      // Clear active by updating globalState directly via manager
-      await connectionsManager.setActiveConnection(active.id);
-      // Re-update to clear it — use a workaround by toggling and clearing
-      // Expose a clearActive helper via a workaround
-      await vscode.commands.executeCommand(
-        "pptb.connections.clearActive"
-      );
-    }
-  );
-
-  // Internal command to clear the active connection
-  const clearActiveCmd = vscode.commands.registerCommand(
-    "pptb.connections.clearActive",
-    async () => {
-      // Directly update the globalState
-      await context.globalState.update("pptb.activeConnectionId", undefined);
-      connectionsManager.onConnectionsChanged.fire();
+      await connectionsManager.clearActiveConnection();
       vscode.window.showInformationMessage("Disconnected.");
     }
   );
@@ -182,7 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── Register all disposables ──────────────────────────────────────────────
   context.subscriptions.push(
-    authManager as unknown as vscode.Disposable,
+    authManager,
     connectionsManager.onConnectionsChanged,
     treeView,
     statusBar,
@@ -191,7 +175,6 @@ export function activate(context: vscode.ExtensionContext): void {
     deleteCmd,
     connectCmd,
     disconnectCmd,
-    clearActiveCmd,
     setActiveCmd,
     testCmd,
     refreshCmd

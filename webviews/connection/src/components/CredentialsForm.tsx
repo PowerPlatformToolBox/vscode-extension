@@ -49,8 +49,7 @@ export default function CredentialsForm({
   onChange,
 }: Props): React.ReactElement {
   const { clientId, clientSecret, username, tenantId } = connection;
-  // Access the auth credential field via bracket notation to avoid scanner masking
-  const authCredential = (connection as Record<string, string | undefined>)["password"];
+  const authPwd = connection.password;
 
   if (authType === "InteractiveBrowser") {
     return (
@@ -195,13 +194,11 @@ export default function CredentialsForm({
           id="cred-password"
           style={inputStyle}
           type="password"
-          value={authCredential ?? ""}
+          value={authPwd ?? ""}
           placeholder="Your password"
-          onChange={(e) => {
-            const updated: Partial<Connection> = {};
-            (updated as Record<string, string | undefined>)["password"] = e.target.value || undefined;
-            onChange(updated);
-          }}
+          onChange={(e) =>
+            onChange({ password: e.target.value || undefined })
+          }
         />
         <span
           style={{
