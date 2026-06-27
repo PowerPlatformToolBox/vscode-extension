@@ -468,6 +468,11 @@ export class ConnectionsManager {
           typeof entry.enabledForPowerPlatformAPI === "boolean"
             ? entry.enabledForPowerPlatformAPI
             : false,
+        scopesForPowerPlatformAPI:
+          Array.isArray(entry.scopesForPowerPlatformAPI) &&
+          (entry.scopesForPowerPlatformAPI as unknown[]).every((s) => typeof s === "string")
+            ? (entry.scopesForPowerPlatformAPI as string[])
+            : undefined,
         hasIncompleteCredentials,
       };
 

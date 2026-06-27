@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
 import { AuthManager } from "./managers/authManager";
 import { ConnectionsManager } from "./managers/connectionsManager";
 import { DataverseManager } from "./managers/dataverseManager";
@@ -179,7 +178,7 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const exported = connectionsManager.exportConnections();
       const json = JSON.stringify(exported, null, 2);
-      fs.writeFileSync(saveUri.fsPath, json, "utf8");
+      await vscode.workspace.fs.writeFile(saveUri, Buffer.from(json, "utf8"));
       vscode.window.showInformationMessage(
         `Exported ${exported.connections.length} connection(s) to ${saveUri.fsPath}`
       );
@@ -201,7 +200,8 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       try {
-        const raw = fs.readFileSync(fileUri.fsPath, "utf8");
+        const bytes = await vscode.workspace.fs.readFile(fileUri);
+        const raw = Buffer.from(bytes).toString("utf8");
         const data: unknown = JSON.parse(raw);
         const result = await connectionsManager.importConnections(data);
         const msg = `Imported ${result.imported} connection(s)${result.skipped > 0 ? `, skipped ${result.skipped}` : ""}.`;
