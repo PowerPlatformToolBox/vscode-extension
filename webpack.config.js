@@ -3,6 +3,8 @@
 "use strict";
 
 const path = require("path");
+const webpack = require("webpack");
+require("dotenv").config();
 
 /** @type {import('webpack').Configuration[]} */
 const config = [
@@ -36,6 +38,16 @@ const config = [
         },
       ],
     },
+    plugins: [
+      new webpack.DefinePlugin({
+        "process.env.PPTB_SUPABASE_URL": JSON.stringify(
+          process.env.PPTB_SUPABASE_URL ?? ""
+        ),
+        "process.env.PPTB_SUPABASE_ANON_KEY": JSON.stringify(
+          process.env.PPTB_SUPABASE_ANON_KEY ?? ""
+        ),
+      }),
+    ],
     devtool: "nosources-source-map",
     infrastructureLogging: {
       level: "log",

@@ -119,21 +119,6 @@
           "group": "3_delete@1"
         }
       ]
-    },
-    "configuration": {
-      "title": "Power Platform ToolBox",
-      "properties": {
-        "pptb.supabaseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Supabase project URL for PPTB backend services"
-        },
-        "pptb.supabaseAnonKey": {
-          "type": "string",
-          "default": "",
-          "description": "Supabase anonymous key for PPTB backend services"
-        }
-      }
     }
   },
   "scripts": {
@@ -154,18 +139,19 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "@types/uuid": "^10.0.0",
     "@types/vscode": "^1.85.0",
     "@types/webpack-env": "^1.18.4",
     "css-loader": "^7.1.2",
+    "dotenv": "^17.4.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "style-loader": "^4.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
     "webpack": "^5.90.1",
-    "webpack-cli": "^5.1.4",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "webpack-cli": "^5.1.4"
   }
 }
