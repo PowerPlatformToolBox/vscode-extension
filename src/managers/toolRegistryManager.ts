@@ -114,8 +114,14 @@ export class ToolRegistryManager {
     }
 
     if (search) {
+      // Escape PostgREST ILIKE special characters so literal percent-signs,
+      // underscores, and backslashes in the search term are treated as text.
+      const escaped = search
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
       query = query.or(
-        `name.ilike.%${search}%,description.ilike.%${search}%`
+        `name.ilike.%${escaped}%,description.ilike.%${escaped}%`
       );
     }
 

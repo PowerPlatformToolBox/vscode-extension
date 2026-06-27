@@ -129,6 +129,9 @@ export class ToolHostPanel {
         });
         break;
       }
+      default:
+        console.warn("ToolHostPanel: unrecognised message type:", message.type);
+        break;
     }
   }
 
