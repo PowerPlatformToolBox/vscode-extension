@@ -21,6 +21,18 @@ import {
 import type { Connection } from "./connectionsManager";
 
 /**
+ * Escape HTML special characters to prevent XSS in the local redirect page.
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
  * File-based MSAL cache plugin that persists tokens to globalStorageUri.
  */
 function createCachePlugin(cacheFilePath: string): ICachePlugin {
@@ -203,7 +215,7 @@ export class AuthManager {
         } else {
           const errorDesc = url.searchParams.get("error_description") ?? error ?? "Unknown error";
           res.end(
-            `<html><body><h2>Authentication failed: ${errorDesc}</h2></body></html>`
+            `<html><body><h2>Authentication failed: ${escapeHtml(errorDesc)}</h2></body></html>`
           );
           server.close();
           reject(new Error(`Auth failed: ${errorDesc}`));
