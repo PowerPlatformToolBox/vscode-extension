@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { v4 as uuidv4 } from "uuid";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ interface StoredEntry extends TerminalEntry {
  */
 export class TerminalManager implements vscode.Disposable {
   private readonly terminals = new Map<string, StoredEntry>();
-  private counter = 0;
+  private commandCounter = 0;
 
   private readonly _onTerminalOutput =
     new vscode.EventEmitter<TerminalOutputEvent>();
@@ -170,7 +171,7 @@ export class TerminalManager implements vscode.Disposable {
     toolId: string,
     toolInstanceId: string
   ): TerminalInfo {
-    const id = `terminal-${Date.now()}-${++this.counter}`;
+    const id = uuidv4();
     const name = options.name ?? "PPTB Terminal";
     const shellPath =
       typeof options.shell === "string" ? options.shell : undefined;
@@ -222,7 +223,7 @@ export class TerminalManager implements vscode.Disposable {
     entry.terminal.sendText(command, true);
     return {
       terminalId,
-      commandId: `${terminalId}:${Date.now()}`,
+      commandId: `${terminalId}:${++this.commandCounter}`,
     };
   }
 

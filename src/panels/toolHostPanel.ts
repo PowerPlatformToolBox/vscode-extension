@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { v4 as uuidv4 } from "uuid";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { ToolManager } from "../managers/toolManager";
 import { TerminalManager } from "../managers/terminalManager";
@@ -516,7 +517,7 @@ export class ToolHostPanel {
         };
         const toolId = this.toolContext.toolId ?? "unknown-tool";
         const toolInstanceId =
-          this.toolContext.instanceId ?? `instance-${Date.now()}`;
+          this.toolContext.instanceId ?? uuidv4();
         const info = this.terminalManager.create(options, toolId, toolInstanceId);
         this.pushEvent("terminal:created", info);
         return info;
