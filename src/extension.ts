@@ -2,8 +2,12 @@ import * as vscode from "vscode";
 import { AuthManager } from "./managers/authManager";
 import { ConnectionsManager } from "./managers/connectionsManager";
 import { DataverseManager } from "./managers/dataverseManager";
-import { ConnectionsTreeDataProvider, ConnectionTreeItem } from "./providers/connectionsTreeDataProvider";
+import { ToolManager } from "./managers/toolManager";
+import { ToolRegistryManager } from "./managers/toolRegistryManager";
 import { ConnectionPanel } from "./panels/connectionPanel";
+import { ConnectionsTreeDataProvider, ConnectionTreeItem } from "./providers/connectionsTreeDataProvider";
+import { InstalledToolsTreeDataProvider, InstalledToolTreeItem } from "./providers/installedToolsTreeDataProvider";
+import { MarketplaceToolTreeItem, MarketplaceTreeDataProvider } from "./providers/marketplaceTreeDataProvider";
 import { ConnectionStatusBar } from "./statusbar/connectionStatusBar";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -24,6 +28,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── Status bar ────────────────────────────────────────────────────────────
   const statusBar = new ConnectionStatusBar(connectionsManager);
+
+  // ── Tool managers ─────────────────────────────────────────────────────────
+  const toolManager = new ToolManager(context);
+  const toolRegistryManager = new ToolRegistryManager();
+
+  // ── Installed Tools tree view ─────────────────────────────────────────────
+  const installedToolsProvider = new InstalledToolsTreeDataProvider(toolManager);
+  const installedToolsView = vscode.window.createTreeView("pptb.installedToolsView", {
+    treeDataProvider: installedToolsProvider,
+    showCollapseAll: false,
+  });
+
+  // ── Marketplace tree view ─────────────────────────────────────────────────
+  const marketplaceProvider = new MarketplaceTreeDataProvider(toolRegistryManager);
+  const marketplaceView = vscode.window.createTreeView("pptb.marketplaceView", {
+    treeDataProvider: marketplaceProvider,
+    showCollapseAll: false,
+  });
 
   // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -164,6 +186,63 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  // ── Tool commands ─────────────────────────────────────────────────────────
+
+  const refreshInstalledCmd = vscode.commands.registerCommand(
+    "pptb.tools.refresh",
+    () => installedToolsProvider.refresh()
+  );
+
+  const uninstallToolCmd = vscode.commands.registerCommand(
+    "pptb.tools.uninstall",
+    async (item?: InstalledToolTreeItem) => {
+      if (!item?.tool) {
+        vscode.window.showWarningMessage("No tool selected to uninstall.");
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Uninstall "${item.tool.name}"? This cannot be undone.`,
+        { modal: true },
+        "Uninstall"
+      );
+      if (confirm === "Uninstall") {
+        await toolManager.uninstall(item.tool.id);
+        vscode.window.showInformationMessage(`"${item.tool.name}" uninstalled.`);
+      }
+    }
+  );
+
+  const refreshMarketplaceCmd = vscode.commands.registerCommand(
+    "pptb.marketplace.refresh",
+    () => marketplaceProvider.refresh()
+  );
+
+  const installToolCmd = vscode.commands.registerCommand(
+    "pptb.marketplace.install",
+    async (item?: MarketplaceToolTreeItem) => {
+      if (!item?.registryTool) {
+        vscode.window.showWarningMessage("No tool selected to install.");
+        return;
+      }
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Installing "${item.registryTool.name}"…`,
+            cancellable: false,
+          },
+          () => toolManager.install(item.registryTool!)
+        );
+        vscode.window.showInformationMessage(
+          `"${item.registryTool.name}" installed successfully.`
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Install failed: ${msg}`);
+      }
+    }
+  );
+
   // Export connections
   const exportCmd = vscode.commands.registerCommand(
     "pptb.connections.export",
@@ -222,6 +301,9 @@ export function activate(context: vscode.ExtensionContext): void {
     authManager,
     connectionsManager.onConnectionsChanged,
     treeView,
+    installedToolsView,
+    marketplaceView,
+    toolManager,
     statusBar,
     addCmd,
     editCmd,
@@ -232,7 +314,11 @@ export function activate(context: vscode.ExtensionContext): void {
     testCmd,
     refreshCmd,
     exportCmd,
-    importCmd
+    importCmd,
+    refreshInstalledCmd,
+    uninstallToolCmd,
+    refreshMarketplaceCmd,
+    installToolCmd
   );
 }
 

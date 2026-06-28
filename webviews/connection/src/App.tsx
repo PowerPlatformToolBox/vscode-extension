@@ -1,8 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
-import EnvironmentDetails from "./components/EnvironmentDetails";
-import AuthTypeSelector from "./components/AuthTypeSelector";
-import CredentialsForm from "./components/CredentialsForm";
-import TestAndSave from "./components/TestAndSave";
+import React, { useEffect, useState } from "react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -25,11 +21,14 @@ export interface Connection {
   category?: string;
   environmentColor?: string;
   categoryColor?: string;
+  enabledForPowerPlatformAPI?: boolean;
+  browser?: string;
+  browserProfile?: string;
   createdAt?: string;
   lastUsedAt?: string;
 }
 
-// ── VS Code API ───────────────────────────────────────────────────────────────
+// ── VS Code API ────────────────────────────────────────────────────────────────
 
 declare function acquireVsCodeApi(): {
   postMessage: (message: unknown) => void;
@@ -37,331 +36,549 @@ declare function acquireVsCodeApi(): {
 
 const vscodeApi = acquireVsCodeApi();
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    fontFamily: "var(--vscode-font-family, 'Segoe UI', sans-serif)",
-    fontSize: 14,
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "center",
-    padding: "32px 16px",
-  } as React.CSSProperties,
-  card: {
-    background: "#181825",
-    borderRadius: 12,
-    boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-    width: "100%",
-    maxWidth: 560,
-    overflow: "hidden",
-  } as React.CSSProperties,
-  header: {
-    background: "#11111b",
-    padding: "20px 28px",
-    borderBottom: "1px solid #313244",
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-  } as React.CSSProperties,
-  headerTitle: {
-    margin: 0,
-    fontSize: 18,
-    fontWeight: 600,
-    color: "#cdd6f4",
-  } as React.CSSProperties,
-  stepIndicator: {
-    display: "flex",
-    gap: 8,
-    padding: "16px 28px",
-    borderBottom: "1px solid #313244",
-    background: "#11111b",
-  } as React.CSSProperties,
-  body: {
-    padding: "28px",
-  } as React.CSSProperties,
-  footer: {
-    padding: "16px 28px",
-    borderTop: "1px solid #313244",
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 8,
-  } as React.CSSProperties,
-};
-
-function stepDotStyle(active: boolean, done: boolean): React.CSSProperties {
-  return {
-    width: 28,
-    height: 28,
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    fontWeight: 700,
-    background: done ? "#6c63ff" : active ? "#6c63ff33" : "#313244",
-    color: done || active ? "#cdd6f4" : "#6c7086",
-    border: active ? "2px solid #6c63ff" : "2px solid transparent",
-    transition: "all 0.2s ease",
-  };
-}
-
-function stepLineStyle(done: boolean): React.CSSProperties {
-  return {
-    flex: 1,
-    height: 2,
-    background: done ? "#6c63ff" : "#313244",
-    margin: "13px 0",
-    transition: "background 0.2s ease",
-  };
-}
-
-function buttonStyle(variant: "primary" | "secondary" | "danger"): React.CSSProperties {
-  return {
-    padding: "8px 20px",
-    borderRadius: 6,
-    border: "none",
-    cursor: "pointer",
-    fontSize: 13,
-    fontWeight: 600,
-    background:
-      variant === "primary"
-        ? "#6c63ff"
-        : variant === "danger"
-        ? "#f38ba8"
-        : "#313244",
-    color:
-      variant === "primary" || variant === "danger" ? "#1e1e2e" : "#cdd6f4",
-    transition: "opacity 0.15s ease",
-  };
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function generateId(): string {
   return crypto.randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 }
 
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const AUTH_OPTIONS: { value: AuthType; label: string }[] = [
+  { value: "InteractiveBrowser", label: "Microsoft Login (OAuth)" },
+  { value: "ClientCredentials", label: "Client Credentials (Service Principal)" },
+  { value: "UsernamePassword", label: "Username / Password" },
+];
+
+const ENVIRONMENTS: Connection["environment"][] = ["Dev", "Test", "UAT", "Production"];
+
+const BROWSERS = ["System Default", "Chrome", "Firefox", "Edge", "Safari"];
+
+// ── Shared VS Code–themed styles ───────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "var(--vscode-input-background)",
+  color: "var(--vscode-input-foreground)",
+  border: "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
+  borderRadius: 2,
+  padding: "5px 8px",
+  fontSize: "inherit",
+  fontFamily: "inherit",
+  outline: "none",
+  boxSizing: "border-box",
+};
+
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  background: "var(--vscode-dropdown-background)",
+  color: "var(--vscode-dropdown-foreground)",
+  border: "1px solid var(--vscode-dropdown-border, var(--vscode-panel-border))",
+  cursor: "pointer",
+};
+
+const labelCss: React.CSSProperties = {
+  display: "block",
+  marginBottom: 4,
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--vscode-foreground)",
+};
+
+const hintCss: React.CSSProperties = {
+  display: "block",
+  marginTop: 3,
+  fontSize: 11,
+  color: "var(--vscode-descriptionForeground)",
+  lineHeight: 1.4,
+};
+
+const sectionBox: React.CSSProperties = {
+  border: "1px solid var(--vscode-panel-border)",
+  borderRadius: 2,
+  padding: "12px 14px",
+};
+
+const sectionTitle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+  color: "var(--vscode-sideBarSectionHeader-foreground, var(--vscode-descriptionForeground))",
+  marginBottom: 14,
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  padding: "5px 14px",
+  border: "none",
+  borderRadius: 2,
+  cursor: "pointer",
+  fontSize: "inherit",
+  fontFamily: "inherit",
+  background: "var(--vscode-button-secondaryBackground)",
+  color: "var(--vscode-button-secondaryForeground)",
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  padding: "5px 14px",
+  border: "none",
+  borderRadius: 2,
+  cursor: "pointer",
+  fontSize: "inherit",
+  fontFamily: "inherit",
+  background: "var(--vscode-button-background)",
+  color: "var(--vscode-button-foreground)",
+};
+
+// ── Field wrapper ──────────────────────────────────────────────────────────────
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+  style,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}): React.ReactElement {
+  return (
+    <div style={{ marginBottom: 14, ...style }}>
+      <label style={labelCss}>
+        {label}
+        {required && (
+          <span
+            style={{
+              color: "var(--vscode-inputValidation-errorForeground, #f48771)",
+              marginLeft: 2,
+            }}
+          >
+            *
+          </span>
+        )}
+      </label>
+      {children}
+      {hint && <span style={hintCss}>{hint}</span>}
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 4;
-
 export default function App(): React.ReactElement {
-  const [step, setStep] = useState(1);
-  const [connection, setConnection] = useState<Connection>({
+  const [conn, setConn] = useState<Connection>({
     id: generateId(),
     name: "",
     url: "",
     environment: "Dev",
     authType: "InteractiveBrowser",
   });
-  const [testState, setTestState] = useState<
-    "idle" | "pending" | "success" | "failure"
-  >("idle");
-  const [testError, setTestError] = useState<string | undefined>();
   const [isEditing, setIsEditing] = useState(false);
 
-  // Listen for messages from the extension host
   useEffect(() => {
-    const handler = (event: MessageEvent<{ type: string; connection?: Connection; success?: boolean; error?: string }>) => {
-      const msg = event.data;
-      if (msg.type === "pptb:init") {
-        if (msg.connection) {
-          setConnection(msg.connection);
-          setIsEditing(true);
-        }
-      } else if (msg.type === "pptb:testResult") {
-        if (msg.success) {
-          setTestState("success");
-        } else {
-          setTestState("failure");
-          setTestError(msg.error);
-        }
+    const handler = (
+      event: MessageEvent<{ type: string; connection?: Connection }>
+    ) => {
+      if (event.data.type === "pptb:init" && event.data.connection) {
+        setConn(event.data.connection);
+        setIsEditing(true);
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, []);
 
-  const updateConnection = useCallback(
-    (patch: Partial<Connection>) => {
-      setConnection((prev) => ({ ...prev, ...patch }));
-      // Reset test state if connection details change
-      if (testState !== "idle") {
-        setTestState("idle");
-        setTestError(undefined);
-      }
-    },
-    [testState]
-  );
+  const update = (patch: Partial<Connection>) =>
+    setConn((prev) => ({ ...prev, ...patch }));
 
-  const canProceed = (): boolean => {
-    switch (step) {
-      case 1:
-        return connection.name.trim().length > 0 && connection.url.trim().length > 0;
-      case 2:
-        return !!connection.authType;
-      case 3:
-        if (connection.authType === "ClientCredentials") {
-          return !!connection.clientId?.trim() && !!connection.clientSecret?.trim();
-        }
-        if (connection.authType === "UsernamePassword") {
-          return !!connection.username?.trim() && !!connection.password?.trim();
-        }
-        return true; // InteractiveBrowser has no required fields
-      case 4:
-        return testState === "success";
-      default:
-        return false;
-    }
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    vscodeApi.postMessage({ type: "pptb:save", connection: conn });
   };
 
-  const handleTest = (): void => {
-    setTestState("pending");
-    vscodeApi.postMessage({ type: "pptb:test", connection });
-  };
+  const handleCancel = () => vscodeApi.postMessage({ type: "pptb:cancel" });
 
-  const handleSave = (): void => {
-    vscodeApi.postMessage({ type: "pptb:save", connection });
-  };
+  const canSave = conn.name.trim().length > 0 && conn.url.trim().length > 0;
 
-  const handleCancel = (): void => {
-    vscodeApi.postMessage({ type: "pptb:cancel" });
-  };
+  // ── Auth-specific credentials section ─────────────────────────────────────
+  let authTitle = "MICROSOFT LOGIN OPTIONS";
+  let authSection: React.ReactElement;
 
-  const renderStep = (): React.ReactElement => {
-    switch (step) {
-      case 1:
-        return (
-          <EnvironmentDetails
-            name={connection.name}
-            url={connection.url}
-            environment={connection.environment}
-            onChange={(patch) => updateConnection(patch)}
+  if (conn.authType === "InteractiveBrowser") {
+    authSection = (
+      <>
+        <Field
+          label="Username / Email (Optional)"
+          hint="Pre-fill the login prompt with a specific email address. Leave empty to choose from browser accounts."
+        >
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.username ?? ""}
+            placeholder="user@domain.com"
+            onChange={(e) => update({ username: e.target.value || undefined })}
           />
-        );
-      case 2:
-        return (
-          <AuthTypeSelector
-            authType={connection.authType}
-            onChange={(authType) => updateConnection({ authType })}
+        </Field>
+        <Field
+          label="Client ID (Optional)"
+          hint="Use a custom App Registration instead of the default PPTB client."
+        >
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.clientId ?? ""}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            onChange={(e) => update({ clientId: e.target.value || undefined })}
           />
-        );
-      case 3:
-        return (
-          <CredentialsForm
-            authType={connection.authType}
-            connection={connection}
-            onChange={(patch) => updateConnection(patch)}
+        </Field>
+        <Field
+          label="Tenant ID (Optional)"
+          hint="Restrict sign-in to a specific Azure AD tenant."
+          style={{ marginBottom: 0 }}
+        >
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.tenantId ?? ""}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            onChange={(e) => update({ tenantId: e.target.value || undefined })}
           />
-        );
-      case 4:
-        return (
-          <TestAndSave
-            testState={testState}
-            testError={testError}
-            onTest={handleTest}
+        </Field>
+      </>
+    );
+  } else if (conn.authType === "ClientCredentials") {
+    authTitle = "SERVICE PRINCIPAL";
+    authSection = (
+      <>
+        <Field label="Tenant ID" required>
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.tenantId ?? ""}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            onChange={(e) => update({ tenantId: e.target.value || undefined })}
           />
-        );
-      default:
-        return <></>;
-    }
-  };
-
-  const stepLabels = ["Details", "Auth", "Credentials", "Test & Save"];
+        </Field>
+        <Field label="Client ID" required>
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.clientId ?? ""}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            onChange={(e) => update({ clientId: e.target.value || undefined })}
+          />
+        </Field>
+        <Field label="Client Secret" required style={{ marginBottom: 0 }}>
+          <input
+            style={inputStyle}
+            type="password"
+            value={conn.clientSecret ?? ""}
+            placeholder="Your client secret value"
+            onChange={(e) =>
+              update({ clientSecret: e.target.value || undefined })
+            }
+          />
+        </Field>
+      </>
+    );
+  } else {
+    authTitle = "USER CREDENTIALS";
+    authSection = (
+      <>
+        <Field label="Username" required>
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.username ?? ""}
+            placeholder="user@domain.com"
+            onChange={(e) => update({ username: e.target.value || undefined })}
+          />
+        </Field>
+        <Field label="Password" required>
+          <input
+            style={inputStyle}
+            type="password"
+            value={conn.password ?? ""}
+            placeholder="Your password"
+            onChange={(e) => update({ password: e.target.value || undefined })}
+          />
+        </Field>
+        <Field
+          label="Tenant ID (Optional)"
+          style={{ marginBottom: 0 }}
+        >
+          <input
+            style={inputStyle}
+            type="text"
+            value={conn.tenantId ?? ""}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            onChange={(e) => update({ tenantId: e.target.value || undefined })}
+          />
+        </Field>
+      </>
+    );
+  }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        {/* Header */}
-        <div style={styles.header}>
-          <span style={{ fontSize: 22 }}>🔌</span>
-          <h1 style={styles.headerTitle}>
-            {isEditing ? "Edit Connection" : "Add Connection"}
-          </h1>
-        </div>
-
-        {/* Step indicator */}
-        <div style={styles.stepIndicator}>
-          {stepLabels.map((label, i) => {
-            const num = i + 1;
-            const isDone = num < step;
-            const isActive = num === step;
-            return (
-              <React.Fragment key={label}>
-                <div
-                  title={label}
-                  style={stepDotStyle(isActive, isDone)}
-                >
-                  {isDone ? "✓" : num}
-                </div>
-                {i < stepLabels.length - 1 && (
-                  <div style={stepLineStyle(isDone)} />
-                )}
-              </React.Fragment>
-            );
-          })}
-        </div>
-
-        {/* Step content */}
-        <div style={styles.body}>{renderStep()}</div>
-
-        {/* Footer nav */}
-        <div style={styles.footer}>
-          <div>
-            <button
-              style={buttonStyle("secondary")}
-              onClick={handleCancel}
-            >
-              Cancel
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {step > 1 && (
-              <button
-                style={buttonStyle("secondary")}
-                onClick={() => setStep((s) => s - 1)}
-              >
-                Back
-              </button>
-            )}
-            {step < TOTAL_STEPS ? (
-              <button
-                style={{
-                  ...buttonStyle("primary"),
-                  opacity: canProceed() ? 1 : 0.5,
-                  cursor: canProceed() ? "pointer" : "not-allowed",
-                }}
-                onClick={() => {
-                  if (canProceed()) {
-                    setStep((s) => s + 1);
-                  }
-                }}
-                disabled={!canProceed()}
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                style={{
-                  ...buttonStyle("primary"),
-                  opacity: canProceed() ? 1 : 0.5,
-                  cursor: canProceed() ? "pointer" : "not-allowed",
-                }}
-                onClick={handleSave}
-                disabled={!canProceed()}
-              >
-                Save
-              </button>
-            )}
-          </div>
-        </div>
+    <div
+      style={{
+        padding: "20px 24px 28px",
+        maxWidth: 760,
+        color: "var(--vscode-foreground)",
+        fontFamily: "var(--vscode-font-family)",
+        fontSize: "var(--vscode-font-size, 13px)",
+      }}
+    >
+      {/* Breadcrumb */}
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--vscode-descriptionForeground)",
+          marginBottom: 6,
+          textTransform: "uppercase",
+          letterSpacing: "0.07em",
+        }}
+      >
+        CONNECTIONS
       </div>
+
+      {/* Title */}
+      <h1
+        style={{
+          margin: "0 0 24px",
+          fontSize: 20,
+          fontWeight: 600,
+          color: "var(--vscode-foreground)",
+        }}
+      >
+        {isEditing ? "Edit Connection" : "Add Dataverse Connection"}
+      </h1>
+
+      <form onSubmit={handleSave}>
+        {/* Row 1: Connection Name + Auth Type */}
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
+        >
+          <Field label="Connection Name" required>
+            <input
+              style={inputStyle}
+              type="text"
+              value={conn.name}
+              placeholder="Production"
+              autoFocus
+              onChange={(e) => update({ name: e.target.value })}
+            />
+          </Field>
+          <Field label="Authentication Type" required>
+            <select
+              style={selectStyle}
+              value={conn.authType}
+              onChange={(e) =>
+                update({ authType: e.target.value as AuthType })
+              }
+            >
+              {AUTH_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        {/* Enable for Power Platform API */}
+        <div style={{ marginBottom: 16 }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={conn.enabledForPowerPlatformAPI ?? false}
+              onChange={(e) =>
+                update({
+                  enabledForPowerPlatformAPI: e.target.checked || undefined,
+                })
+              }
+            />
+            <span style={{ fontWeight: 600 }}>Enable for Power Platform API</span>
+          </label>
+          <span style={{ ...hintCss, marginLeft: 22 }}>
+            Check this to allow this connection to be used for Power Platform API tools.
+          </span>
+        </div>
+
+        {/* Environment URL */}
+        <Field
+          label="Environment URL"
+          required
+          hint="The root URL of your Dataverse / Power Platform environment."
+        >
+          <input
+            style={inputStyle}
+            type="url"
+            value={conn.url}
+            placeholder="https://org.crm.dynamics.com"
+            onChange={(e) => update({ url: e.target.value })}
+          />
+        </Field>
+
+        {/* Environment + Color */}
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
+        >
+          <Field label="Environment">
+            <select
+              style={selectStyle}
+              value={conn.environment}
+              onChange={(e) =>
+                update({
+                  environment: e.target.value as Connection["environment"],
+                })
+              }
+            >
+              {ENVIRONMENTS.map((env) => (
+                <option key={env} value={env}>
+                  {env}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Environment Color (Optional)">
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="color"
+                value={conn.environmentColor ?? "#0078d4"}
+                onChange={(e) => update({ environmentColor: e.target.value })}
+                style={{
+                  width: 32,
+                  height: 26,
+                  padding: 1,
+                  border:
+                    "1px solid var(--vscode-input-border, var(--vscode-panel-border))",
+                  borderRadius: 2,
+                  background: "var(--vscode-input-background)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              />
+              <input
+                style={{ ...inputStyle, flex: 1 }}
+                type="text"
+                value={conn.environmentColor ?? ""}
+                placeholder="#0078d4"
+                maxLength={7}
+                onChange={(e) =>
+                  update({ environmentColor: e.target.value || undefined })
+                }
+              />
+              <button
+                type="button"
+                onClick={() => update({ environmentColor: undefined })}
+                style={{ ...secondaryBtnStyle, flexShrink: 0 }}
+              >
+                Reset
+              </button>
+            </div>
+          </Field>
+        </div>
+
+        {/* Category */}
+        <Field label="Category (Optional)">
+          <select
+            style={selectStyle}
+            value={conn.category ?? ""}
+            onChange={(e) => update({ category: e.target.value || undefined })}
+          >
+            <option value="">--</option>
+            <option value="Dev">Dev</option>
+            <option value="QA">QA</option>
+            <option value="Test">Test</option>
+            <option value="UAT">UAT</option>
+            <option value="Production">Production</option>
+          </select>
+        </Field>
+
+        {/* Two sections: Browser Settings + Auth Credentials */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 16,
+            marginBottom: 28,
+          }}
+        >
+          {/* Browser Settings */}
+          <div style={sectionBox}>
+            <div style={sectionTitle}>Browser Settings (Optional)</div>
+            <Field
+              label="Browser"
+              hint="Choose which browser to use when opening URLs with authentication. Defaults to your system's default browser."
+            >
+              <select
+                style={selectStyle}
+                value={conn.browser ?? "System Default"}
+                onChange={(e) =>
+                  update({
+                    browser:
+                      e.target.value === "System Default"
+                        ? undefined
+                        : e.target.value,
+                  })
+                }
+              >
+                {BROWSERS.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Browser Profile" style={{ marginBottom: 0 }}>
+              <input
+                style={inputStyle}
+                type="text"
+                value={conn.browserProfile ?? ""}
+                placeholder="Default"
+                onChange={(e) =>
+                  update({ browserProfile: e.target.value || undefined })
+                }
+              />
+            </Field>
+          </div>
+
+          {/* Auth credentials section */}
+          <div style={sectionBox}>
+            <div style={sectionTitle}>{authTitle}</div>
+            {authSection}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button type="button" onClick={handleCancel} style={secondaryBtnStyle}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!canSave}
+            style={{
+              ...primaryBtnStyle,
+              opacity: canSave ? 1 : 0.5,
+              cursor: canSave ? "pointer" : "not-allowed",
+            }}
+          >
+            {isEditing ? "Save" : "Add"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

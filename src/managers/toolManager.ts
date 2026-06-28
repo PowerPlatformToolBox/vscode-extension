@@ -1,8 +1,8 @@
-import * as vscode from "vscode";
 import * as fs from "fs";
-import * as path from "path";
-import * as https from "https";
 import * as http from "http";
+import * as https from "https";
+import * as path from "path";
+import * as vscode from "vscode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,8 @@ export interface Tool {
   version: string;
   /** Optional short description. */
   description?: string;
+  /** Publisher / author of the tool. */
+  publisher?: string;
   /** URL from which the tool binary/archive can be downloaded. */
   downloadUrl?: string;
   /**

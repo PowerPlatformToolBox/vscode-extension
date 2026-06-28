@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
-import type { Connection } from "../managers/connectionsManager";
-import type { ConnectionsManager } from "../managers/connectionsManager";
+import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
 import { getNonce } from "../utils/webview";
 
 /**
@@ -173,7 +172,7 @@ export class ConnectionPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src ${webview.cspSource};">
   <title>Connection</title>
 </head>
 <body>

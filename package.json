@@ -18,7 +18,7 @@
         {
           "id": "pptb-explorer",
           "title": "Power Platform ToolBox",
-          "icon": "$(extensions)"
+          "icon": "./resources/icon.svg"
         }
       ]
     },
@@ -27,6 +27,14 @@
         {
           "id": "pptb.connectionsView",
           "name": "Connections"
+        },
+        {
+          "id": "pptb.installedToolsView",
+          "name": "Installed Tools"
+        },
+        {
+          "id": "pptb.marketplaceView",
+          "name": "Marketplace"
         }
       ]
     },
@@ -34,7 +42,8 @@
       {
         "command": "pptb.connections.add",
         "title": "Add Connection",
-        "category": "PPTB"
+        "category": "PPTB",
+        "icon": "$(add)"
       },
       {
         "command": "pptb.connections.edit",
@@ -83,6 +92,30 @@
         "title": "Import Connections",
         "category": "PPTB",
         "icon": "$(import)"
+      },
+      {
+        "command": "pptb.tools.refresh",
+        "title": "Refresh Installed Tools",
+        "category": "PPTB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pptb.tools.uninstall",
+        "title": "Uninstall Tool",
+        "category": "PPTB",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "pptb.marketplace.refresh",
+        "title": "Refresh Marketplace",
+        "category": "PPTB",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pptb.marketplace.install",
+        "title": "Install Tool",
+        "category": "PPTB",
+        "icon": "$(cloud-download)"
       }
     ],
     "menus": {
@@ -112,9 +145,29 @@
           "command": "pptb.connections.import",
           "when": "view == pptb.connectionsView",
           "group": "2_importexport@2"
+        },
+        {
+          "command": "pptb.tools.refresh",
+          "when": "view == pptb.installedToolsView",
+          "group": "navigation"
+        },
+        {
+          "command": "pptb.marketplace.refresh",
+          "when": "view == pptb.marketplaceView",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
+        {
+          "command": "pptb.tools.uninstall",
+          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "group": "1_manage@1"
+        },
+        {
+          "command": "pptb.marketplace.install",
+          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
+          "group": "1_manage@1"
+        },
         {
           "command": "pptb.connections.connect",
           "when": "view == pptb.connectionsView && viewItem == pptb.connection.inactive",

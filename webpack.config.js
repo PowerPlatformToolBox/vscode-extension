@@ -89,6 +89,11 @@ const config = [
         },
       ],
     },
+    plugins: [
+      new webpack.DefinePlugin({
+        "process.env.NODE_ENV": JSON.stringify("development"),
+      }),
+    ],
     devtool: "nosources-source-map",
   },
 ];

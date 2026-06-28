@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import * as vscode from "vscode";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,8 @@ export interface RegistryTool {
   version: string;
   /** Short description of what the tool does. */
   description?: string;
+  /** Publisher / author of the tool. */
+  publisher?: string;
   /** URL from which the tool binary/archive can be downloaded. */
   downloadUrl?: string;
   /**

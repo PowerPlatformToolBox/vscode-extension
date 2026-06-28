@@ -1,12 +1,12 @@
-import * as vscode from "vscode";
 import { v4 as uuidv4 } from "uuid";
+import * as vscode from "vscode";
 import {
-  CONNECTIONS_STATE_KEY,
-  CONNECTION_SECRETS_KEY_PREFIX,
-  CONNECTION_SECRETS_KEY_SUFFIX,
-  ACTIVE_CONNECTION_KEY,
-  AUTH_TYPES,
-  AuthType,
+    ACTIVE_CONNECTION_KEY,
+    AUTH_TYPES,
+    AuthType,
+    CONNECTIONS_STATE_KEY,
+    CONNECTION_SECRETS_KEY_PREFIX,
+    CONNECTION_SECRETS_KEY_SUFFIX,
 } from "../constants";
 
 /**
@@ -38,6 +38,10 @@ export interface ConnectionPublicFields {
   powerPlatformTokenExpiry?: string;
   /** Marks a connection imported from file that is missing required credentials. */
   hasIncompleteCredentials?: boolean;
+  /** Browser to use for interactive auth (e.g. "Chrome", "Edge"). Undefined = system default. */
+  browser?: string;
+  /** Browser profile name to use for interactive auth. */
+  browserProfile?: string;
 }
 
 /**
