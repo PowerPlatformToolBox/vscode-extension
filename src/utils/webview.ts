@@ -12,5 +12,5 @@ import * as crypto from "crypto";
  * 64-character lowercase hex string, giving 256 bits of entropy.
  */
 export function getNonce(): string {
-  return crypto.randomBytes(32).toString("hex");
+    return crypto.randomBytes(32).toString("hex");
 }

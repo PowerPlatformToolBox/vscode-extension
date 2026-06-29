@@ -34,9 +34,9 @@ export const AUTH_CACHE_FILE = "auth-cache.json";
 
 /** Auth types supported by the extension */
 export const AUTH_TYPES = {
-  INTERACTIVE_BROWSER: "InteractiveBrowser",
-  CLIENT_CREDENTIALS: "ClientCredentials",
-  USERNAME_PASSWORD: "UsernamePassword",
+    INTERACTIVE_BROWSER: "InteractiveBrowser",
+    CLIENT_CREDENTIALS: "ClientCredentials",
+    USERNAME_PASSWORD: "UsernamePassword",
 } as const;
 
 export type AuthType = (typeof AUTH_TYPES)[keyof typeof AUTH_TYPES];
