@@ -351,6 +351,18 @@ export class ToolPanel {
 
                 let html = fs.readFileSync(candidate, "utf8");
 
+                // Rewrite absolute-path src/href attributes to proper webview URIs.
+                // Bundlers like Vite emit paths such as src="/assets/index-xxx.js" which
+                // resolve against the webview origin root (not the tool's dist dir),
+                // producing URLs with no real filesystem path that the service worker
+                // rejects as 401 Unauthorized.  Converting them to explicit webview URIs
+                // (which include the full filesystem path) fixes this for any dist layout.
+                html = html.replace(/\b(src|href)=(["'])(\/[^/"#?\s][^"']*)\2/gi, (_, attr, quote, assetPath) => {
+                    const absPath = path.join(toolDir, assetPath);
+                    const uri = this.panel.webview.asWebviewUri(vscode.Uri.file(absPath));
+                    return `${attr}=${quote}${uri.toString()}${quote}`;
+                });
+
                 // Strip any existing CSP meta so ours takes precedence
                 html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, "");
 
@@ -510,7 +522,8 @@ export class ToolPanel {
                 const kind = vscode.window.activeColorTheme.kind;
                 return kind === vscode.ColorThemeKind.Light ? "light" : "dark";
             }
-            case "openInConnectionBrowser": {
+            case "openInConnectionBrowser":
+            case "openExternal": {
                 const urlText = typeof args[0] === "string" ? args[0] : "";
                 const parsed = vscode.Uri.parse(urlText);
                 if (!["http", "https"].includes(parsed.scheme)) {

@@ -230,6 +230,9 @@
             openInConnectionBrowser(url, connectionTarget = "primary") {
                 return invoke("utils", "openInConnectionBrowser", [url, connectionTarget]);
             },
+            openExternal(url) {
+                return invoke("utils", "openExternal", [url]);
+            },
             copyToClipboard(text) {
                 return invoke("utils", "copyToClipboard", [text]);
             },
@@ -394,6 +397,17 @@
             handleContextMessage(message);
         }
     });
+
+    // Override window.open so that tools running inside the VS Code webview sandbox
+    // (which blocks popups) can still open http/https URLs in the system browser.
+    const _nativeOpen = window.open.bind(window);
+    window.open = function (url, target, features) {
+        if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+            invoke("utils", "openExternal", [url]);
+            return null;
+        }
+        return _nativeOpen(url, target, features);
+    };
 
     window.toolboxAPI = toolboxAPI;
     window.dataverseAPI = dataverseAPI;
