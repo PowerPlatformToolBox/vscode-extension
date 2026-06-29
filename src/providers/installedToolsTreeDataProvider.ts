@@ -1,15 +1,16 @@
 import * as vscode from "vscode";
+import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { InstalledTool, ToolManager } from "../managers/toolManager";
 
 export class InstalledToolTreeItem extends vscode.TreeItem {
     readonly tool: InstalledTool;
 
-    constructor(tool: InstalledTool) {
+    constructor(tool: InstalledTool, iconCacheManager: IconCacheManager) {
         super(tool.name, vscode.TreeItemCollapsibleState.None);
         this.tool = tool;
         this.description = tool.publisher ?? tool.version;
         this.tooltip = tool.description ?? tool.name;
-        this.iconPath = tool.icon ? vscode.Uri.parse(tool.icon) : new vscode.ThemeIcon("package");
+        this.iconPath = iconCacheManager.getLocalUri(tool.icon) ?? new vscode.ThemeIcon("package");
         this.contextValue = "pptb.installedTool";
     }
 }
@@ -19,10 +20,13 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<I
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private readonly toolManager: ToolManager;
+    private readonly iconCacheManager: IconCacheManager;
 
-    constructor(toolManager: ToolManager) {
+    constructor(toolManager: ToolManager, iconCacheManager: IconCacheManager) {
         this.toolManager = toolManager;
+        this.iconCacheManager = iconCacheManager;
         toolManager.onToolsChanged(() => this._onDidChangeTreeData.fire());
+        iconCacheManager.onIconsCached(() => this._onDidChangeTreeData.fire());
     }
 
     refresh(): void {
@@ -42,6 +46,6 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<I
             // use a placeholder subclass approach
             return [];
         }
-        return tools.map((t) => new InstalledToolTreeItem(t));
+        return tools.map((t) => new InstalledToolTreeItem(t, this.iconCacheManager));
     }
 }

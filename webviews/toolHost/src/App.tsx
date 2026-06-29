@@ -8,6 +8,7 @@ interface InstalledTool {
     version: string;
     description?: string;
     publisher?: string;
+    icon?: string;
     toolPath: string;
     installedAt: string;
 }
@@ -182,12 +183,25 @@ export default function App(): React.ReactElement {
                             <div
                                 style={{
                                     ...iconBox,
-                                    background: isSelected ? "var(--vscode-button-foreground)" : "var(--vscode-button-background)",
+                                    background: tool.icon ? "transparent" : isSelected ? "var(--vscode-button-foreground)" : "var(--vscode-button-background)",
                                     color: isSelected ? "var(--vscode-button-background)" : "var(--vscode-button-foreground)",
                                     fontSize: 14,
                                 }}
                             >
-                                {tool.name[0].toUpperCase()}
+                                {tool.icon ? (
+                                    <img
+                                        src={tool.icon}
+                                        alt={tool.name}
+                                        style={{ width: 28, height: 28, objectFit: "contain", borderRadius: 4 }}
+                                        onError={(e) => {
+                                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                                            (e.currentTarget.parentElement as HTMLElement).style.background = isSelected ? "var(--vscode-button-foreground)" : "var(--vscode-button-background)";
+                                            (e.currentTarget.parentElement as HTMLElement).textContent = tool.name[0].toUpperCase();
+                                        }}
+                                    />
+                                ) : (
+                                    tool.name[0].toUpperCase()
+                                )}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div

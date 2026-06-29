@@ -1,16 +1,17 @@
 import * as vscode from "vscode";
+import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { ToolManager } from "../managers/toolManager";
 import type { RegistryTool, ToolRegistryManager } from "../managers/toolRegistryManager";
 
 export class MarketplaceToolTreeItem extends vscode.TreeItem {
     readonly registryTool: RegistryTool | undefined;
 
-    constructor(tool: RegistryTool, isInstalled: boolean) {
+    constructor(tool: RegistryTool, isInstalled: boolean, iconCacheManager: IconCacheManager) {
         super(tool.name, vscode.TreeItemCollapsibleState.None);
         this.registryTool = tool;
         this.description = tool.publisher ?? tool.version;
         this.tooltip = tool.description ?? tool.name;
-        this.iconPath = tool.icon ? vscode.Uri.parse(tool.icon) : new vscode.ThemeIcon(isInstalled ? "check" : "extensions");
+        this.iconPath = iconCacheManager.getLocalUri(tool.icon) ?? new vscode.ThemeIcon(isInstalled ? "check" : "extensions");
         this.contextValue = isInstalled ? "pptb.marketplaceTool.installed" : "pptb.marketplaceTool";
     }
 }
@@ -38,9 +39,11 @@ export class MarketplaceTreeDataProvider implements vscode.TreeDataProvider<AnyI
     constructor(
         private readonly registryManager: ToolRegistryManager,
         private readonly toolManager: ToolManager,
+        private readonly iconCacheManager: IconCacheManager,
     ) {
-        // Re-render rows when a tool is installed or uninstalled
+        // Re-render rows when a tool is installed/uninstalled or icons are cached
         toolManager.onToolsChanged(() => this._onDidChangeTreeData.fire());
+        iconCacheManager.onIconsCached(() => this._onDidChangeTreeData.fire());
     }
 
     refresh(): void {
@@ -85,6 +88,6 @@ export class MarketplaceTreeDataProvider implements vscode.TreeDataProvider<AnyI
             return [new PlaceholderTreeItem("No tools found.")];
         }
 
-        return this.tools.map((t) => new MarketplaceToolTreeItem(t, this.toolManager.isInstalled(t.id)));
+        return this.tools.map((t) => new MarketplaceToolTreeItem(t, this.toolManager.isInstalled(t.id), this.iconCacheManager));
     }
 }

@@ -180,6 +180,27 @@ export class ToolRegistryManager {
 
         return Array.from(tagSet).sort();
     }
+
+    /**
+     * Fetch the icon URL for every tool in the registry (all pages).
+     * Returns a deduplicated list of non-empty URLs.
+     * Used by IconCacheManager to warm up the icon cache at activation.
+     */
+    async getAllIconUrls(): Promise<string[]> {
+        if (!this.client) {
+            return [];
+        }
+        try {
+            const { data, error } = await this.client.from("tools").select("icon");
+            if (error || !data) {
+                return [];
+            }
+            const urls = (data as { icon?: string | null }[]).map((r) => r.icon).filter((u): u is string => typeof u === "string" && u.length > 0);
+            return [...new Set(urls)];
+        } catch {
+            return [];
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
