@@ -132,9 +132,8 @@ export class ToolHostPanel {
                     break;
                 }
                 try {
-                    await vscode.window.withProgress(
-                        { location: vscode.ProgressLocation.Notification, title: `Installing "${registryTool.name}"…`, cancellable: false },
-                        (progress) => this.toolManager.install(registryTool, (msg) => progress.report({ message: msg })),
+                    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Installing "${registryTool.name}"…`, cancellable: false }, (progress) =>
+                        this.toolManager.install(registryTool, (msg) => progress.report({ message: msg })),
                     );
                     vscode.window.showInformationMessage(`"${registryTool.name}" installed successfully.`);
                     this.panel.webview.postMessage({ type: "install-done", toolId });

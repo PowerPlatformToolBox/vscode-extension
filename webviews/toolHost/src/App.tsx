@@ -172,9 +172,7 @@ function ToolIcon({ icon, name, selected }: { icon?: string; name: string; selec
                     style={{ width: 28, height: 28, objectFit: "contain", borderRadius: 4 }}
                     onError={(e) => {
                         (e.currentTarget as HTMLImageElement).style.display = "none";
-                        (e.currentTarget.parentElement as HTMLElement).style.background = selected
-                            ? "var(--vscode-button-foreground)"
-                            : "var(--vscode-button-background)";
+                        (e.currentTarget.parentElement as HTMLElement).style.background = selected ? "var(--vscode-button-foreground)" : "var(--vscode-button-background)";
                         (e.currentTarget.parentElement as HTMLElement).textContent = name[0].toUpperCase();
                     }}
                 />
@@ -241,11 +239,7 @@ function InstalledToolsTab(): React.ReactElement {
 
             <div style={listArea}>
                 {loading && <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>Loading…</div>}
-                {!loading && filtered.length === 0 && (
-                    <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>
-                        {search ? "No tools match your search." : "No tools installed."}
-                    </div>
-                )}
+                {!loading && filtered.length === 0 && <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>{search ? "No tools match your search." : "No tools installed."}</div>}
                 {filtered.map((tool) => {
                     const isSelected = selected?.id === tool.id;
                     const isHovered = hoveredId === tool.id;
@@ -254,37 +248,38 @@ function InstalledToolsTab(): React.ReactElement {
                         ...(isSelected ? toolRowActive : isHovered ? toolRowHover : {}),
                     };
                     return (
-                        <div
-                            key={tool.id}
-                            style={rowStyle}
-                            onClick={() => setSelected(tool)}
-                            onMouseEnter={() => setHoveredId(tool.id)}
-                            onMouseLeave={() => setHoveredId(null)}
-                        >
+                        <div key={tool.id} style={rowStyle} onClick={() => setSelected(tool)} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)}>
                             <ToolIcon icon={tool.icon} name={tool.name} selected={isSelected} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    {tool.name}
-                                </div>
+                                <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tool.name}</div>
                                 <div style={{ ...hint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                     {tool.publisher ? `${tool.publisher} · v${tool.version}` : `v${tool.version}`}
                                 </div>
-                                {tool.description && (
-                                    <div style={{ ...hint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                        {tool.description}
-                                    </div>
-                                )}
+                                {tool.description && <div style={{ ...hint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tool.description}</div>}
                             </div>
                             <div style={{ display: "flex", gap: 4, flexShrink: 0, opacity: isHovered || isSelected ? 1 : 0 }}>
                                 <button
                                     style={{ ...primaryBtn, width: "auto", padding: "3px 10px", fontSize: 11 }}
-                                    onClick={(e) => { e.stopPropagation(); launchTool(tool); }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        launchTool(tool);
+                                    }}
                                 >
                                     Launch
                                 </button>
                                 <button
-                                    style={{ ...primaryBtn, width: "auto", padding: "3px 10px", fontSize: 11, background: "var(--vscode-inputValidation-errorBackground, #5a1d1d)", color: "var(--vscode-button-foreground)" }}
-                                    onClick={(e) => { e.stopPropagation(); uninstallTool(tool); }}
+                                    style={{
+                                        ...primaryBtn,
+                                        width: "auto",
+                                        padding: "3px 10px",
+                                        fontSize: 11,
+                                        background: "var(--vscode-inputValidation-errorBackground, #5a1d1d)",
+                                        color: "var(--vscode-button-foreground)",
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        uninstallTool(tool);
+                                    }}
                                 >
                                     Uninstall
                                 </button>
@@ -332,14 +327,30 @@ function MarketplaceTab(): React.ReactElement {
             }
             if (data?.type === "install-done") {
                 setInstalledIds((prev) => new Set([...prev, data.toolId]));
-                setBusyIds((prev) => { const n = new Set(prev); n.delete(data.toolId); return n; });
+                setBusyIds((prev) => {
+                    const n = new Set(prev);
+                    n.delete(data.toolId);
+                    return n;
+                });
             }
             if (data?.type === "install-error") {
-                setBusyIds((prev) => { const n = new Set(prev); n.delete(data.toolId); return n; });
+                setBusyIds((prev) => {
+                    const n = new Set(prev);
+                    n.delete(data.toolId);
+                    return n;
+                });
             }
             if (data?.type === "uninstall-done") {
-                setInstalledIds((prev) => { const n = new Set(prev); n.delete(data.toolId); return n; });
-                setBusyIds((prev) => { const n = new Set(prev); n.delete(data.toolId); return n; });
+                setInstalledIds((prev) => {
+                    const n = new Set(prev);
+                    n.delete(data.toolId);
+                    return n;
+                });
+                setBusyIds((prev) => {
+                    const n = new Set(prev);
+                    n.delete(data.toolId);
+                    return n;
+                });
             }
         };
 
@@ -368,13 +379,7 @@ function MarketplaceTab(): React.ReactElement {
     return (
         <>
             <div style={toolbar}>
-                <input
-                    style={searchInput}
-                    type="text"
-                    placeholder="Search marketplace…"
-                    value={search}
-                    onChange={(e) => handleSearch(e.target.value)}
-                />
+                <input style={searchInput} type="text" placeholder="Search marketplace…" value={search} onChange={(e) => handleSearch(e.target.value)} />
                 {!loading && <span style={{ ...hint, flexShrink: 0 }}>{tools.length} tools</span>}
             </div>
 
@@ -382,9 +387,7 @@ function MarketplaceTab(): React.ReactElement {
                 {loading && <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>Loading…</div>}
                 {!loading && error && <div style={{ ...hint, padding: "24px 16px", textAlign: "center", color: "var(--vscode-errorForeground)" }}>{error}</div>}
                 {!loading && !error && tools.length === 0 && (
-                    <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>
-                        {search ? "No tools match your search." : "No tools in registry."}
-                    </div>
+                    <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>{search ? "No tools match your search." : "No tools in registry."}</div>
                 )}
                 {tools.map((tool) => {
                     const isInstalled = installedIds.has(tool.id);
@@ -396,45 +399,38 @@ function MarketplaceTab(): React.ReactElement {
                         cursor: "default",
                     };
                     return (
-                        <div
-                            key={tool.id}
-                            style={rowStyle}
-                            onMouseEnter={() => setHoveredId(tool.id)}
-                            onMouseLeave={() => setHoveredId(null)}
-                        >
+                        <div key={tool.id} style={rowStyle} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)}>
                             <ToolIcon icon={tool.icon} name={tool.name} selected={false} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                     {tool.name}
-                                    {isInstalled && (
-                                        <span style={{ ...hint, marginLeft: 6, color: "var(--vscode-testing-iconPassed, #73c991)" }}>✓ installed</span>
-                                    )}
+                                    {isInstalled && <span style={{ ...hint, marginLeft: 6, color: "var(--vscode-testing-iconPassed, #73c991)" }}>✓ installed</span>}
                                 </div>
                                 <div style={{ ...hint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                     {tool.publisher ? `${tool.publisher} · v${tool.version}` : `v${tool.version}`}
                                     {tool.category ? ` · ${tool.category}` : ""}
                                 </div>
-                                {tool.description && (
-                                    <div style={{ ...hint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                        {tool.description}
-                                    </div>
-                                )}
+                                {tool.description && <div style={{ ...hint, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tool.description}</div>}
                             </div>
                             <div style={{ flexShrink: 0, opacity: isHovered ? 1 : 0 }}>
                                 {isInstalled ? (
                                     <button
                                         disabled={isBusy}
-                                        style={{ ...primaryBtn, width: "auto", padding: "3px 10px", fontSize: 11, background: "var(--vscode-inputValidation-errorBackground, #5a1d1d)", color: "var(--vscode-button-foreground)", opacity: isBusy ? 0.5 : 1 }}
+                                        style={{
+                                            ...primaryBtn,
+                                            width: "auto",
+                                            padding: "3px 10px",
+                                            fontSize: 11,
+                                            background: "var(--vscode-inputValidation-errorBackground, #5a1d1d)",
+                                            color: "var(--vscode-button-foreground)",
+                                            opacity: isBusy ? 0.5 : 1,
+                                        }}
                                         onClick={() => uninstallTool(tool)}
                                     >
                                         {isBusy ? "…" : "Uninstall"}
                                     </button>
                                 ) : (
-                                    <button
-                                        disabled={isBusy}
-                                        style={{ ...primaryBtn, width: "auto", padding: "3px 10px", fontSize: 11, opacity: isBusy ? 0.5 : 1 }}
-                                        onClick={() => installTool(tool)}
-                                    >
+                                    <button disabled={isBusy} style={{ ...primaryBtn, width: "auto", padding: "3px 10px", fontSize: 11, opacity: isBusy ? 0.5 : 1 }} onClick={() => installTool(tool)}>
                                         {isBusy ? "…" : "Install"}
                                     </button>
                                 )}
@@ -450,9 +446,7 @@ function MarketplaceTab(): React.ReactElement {
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App(): React.ReactElement {
-    const [activeView, setActiveView] = useState<ActiveView>(
-        typeof __pptbInitialView !== "undefined" ? __pptbInitialView : "installed",
-    );
+    const [activeView, setActiveView] = useState<ActiveView>(typeof __pptbInitialView !== "undefined" ? __pptbInitialView : "installed");
 
     useEffect(() => {
         const handler = (event: MessageEvent) => {
@@ -477,4 +471,3 @@ export default function App(): React.ReactElement {
         </div>
     );
 }
-
