@@ -1,10 +1,10 @@
-import * as vscode from "vscode";
+import { AuthenticationResult, ConfidentialClientApplication, Configuration, ICachePlugin, PublicClientApplication, TokenCacheContext } from "@azure/msal-node";
 import * as fs from "fs";
-import * as path from "path";
 import * as http from "http";
 import * as net from "net";
-import { PublicClientApplication, ConfidentialClientApplication, Configuration, AuthenticationResult, ICachePlugin, TokenCacheContext } from "@azure/msal-node";
-import { AUTH_CACHE_FILE, AUTHORITY_BASE, COMMON_TENANT, POWER_PLATFORM_CLIENT_ID, AUTH_TYPES } from "../constants";
+import * as path from "path";
+import * as vscode from "vscode";
+import { AUTH_CACHE_FILE, AUTH_TYPES, AUTHORITY_BASE, COMMON_TENANT, POWER_PLATFORM_CLIENT_ID } from "../constants";
 import type { Connection } from "./connectionsManager";
 
 /**
@@ -157,9 +157,7 @@ export class AuthManager implements vscode.Disposable {
         const pca = this.createPublicClient(connection);
         const accounts = await pca.getTokenCache().getAllAccounts();
         if (accounts.length > 0) {
-            const account = connection.msalAccountId
-                ? (accounts.find((a) => a.homeAccountId === connection.msalAccountId) ?? accounts[0])
-                : accounts[0];
+            const account = connection.msalAccountId ? (accounts.find((a) => a.homeAccountId === connection.msalAccountId) ?? accounts[0]) : accounts[0];
             try {
                 const result = await pca.acquireTokenSilent({ scopes: [scope], account });
                 if (result?.accessToken) {

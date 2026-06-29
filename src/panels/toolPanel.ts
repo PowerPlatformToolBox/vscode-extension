@@ -77,7 +77,15 @@ export class ToolPanel {
     private readonly eventHistory: ToolBoxEventPayload[] = [];
     private disposables: vscode.Disposable[] = [];
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers, initialContext?: Partial<Pick<ToolContext, "connectionId" | "connectionUrl" | "secondaryConnectionId" | "secondaryConnectionUrl">>) {
+    private constructor(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        toolId: string,
+        toolManager: ToolManager,
+        toolRegistryManager: ToolRegistryManager,
+        managers?: OpenManagers,
+        initialContext?: Partial<Pick<ToolContext, "connectionId" | "connectionUrl" | "secondaryConnectionId" | "secondaryConnectionUrl">>,
+    ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.toolManager = toolManager;
@@ -157,10 +165,7 @@ export class ToolPanel {
         if (managers?.connectionsManager) {
             const activeConnection = managers.connectionsManager.getActiveConnection();
             if (!activeConnection) {
-                const action = await vscode.window.showErrorMessage(
-                    "No active connection. Please connect to an environment before launching a tool.",
-                    "Add Connection",
-                );
+                const action = await vscode.window.showErrorMessage("No active connection. Please connect to an environment before launching a tool.", "Add Connection");
                 if (action === "Add Connection") {
                     await vscode.commands.executeCommand("pptb.connections.add");
                 }
@@ -176,11 +181,7 @@ export class ToolPanel {
                 const multiConnection = ToolPanel.readToolMultiConnectionFeature(tool.toolPath);
 
                 if (multiConnection === "required" || multiConnection === "optional") {
-                    const selected = await ToolPanel.promptSecondaryConnection(
-                        managers.connectionsManager,
-                        activeConnection.id,
-                        multiConnection,
-                    );
+                    const selected = await ToolPanel.promptSecondaryConnection(managers.connectionsManager, activeConnection.id, multiConnection);
 
                     if (selected === undefined && multiConnection === "required") {
                         // User cancelled — required secondary connection not provided
@@ -262,9 +263,7 @@ export class ToolPanel {
 
         if (candidates.length === 0) {
             if (mode === "required") {
-                await vscode.window.showErrorMessage(
-                    "This tool requires a secondary connection but no other connections are configured. Please add another connection first.",
-                );
+                await vscode.window.showErrorMessage("This tool requires a secondary connection but no other connections are configured. Please add another connection first.");
                 return undefined;
             }
             return null; // optional — no candidates, proceed without
