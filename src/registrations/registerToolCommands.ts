@@ -41,7 +41,11 @@ export function registerToolCommands(
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
-        ToolHostPanel.open(context.extensionUri, toolRegistryManager, toolManager, { connectionsManager, dataverseManager });
+        ToolHostPanel.open(context.extensionUri, toolRegistryManager, toolManager, "installed", { connectionsManager, dataverseManager });
+    });
+
+    const browseMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.browse", () => {
+        ToolHostPanel.open(context.extensionUri, toolRegistryManager, toolManager, "marketplace", { connectionsManager, dataverseManager });
     });
 
     const marketplaceUninstallCmd = vscode.commands.registerCommand("pptb.marketplace.uninstall", async (item?: MarketplaceToolTreeItem) => {
@@ -77,5 +81,5 @@ export function registerToolCommands(
         }
     });
 
-    return [refreshInstalledCmd, uninstallToolCmd, refreshMarketplaceCmd, launchToolCmd, browseToolsCmd, marketplaceUninstallCmd, installToolCmd];
+    return [refreshInstalledCmd, uninstallToolCmd, refreshMarketplaceCmd, launchToolCmd, browseToolsCmd, browseMarketplaceCmd, marketplaceUninstallCmd, installToolCmd];
 }

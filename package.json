@@ -1,9 +1,31 @@
 {
   "name": "power-platform-toolbox",
-  "displayName": "Power Platform ToolBox",
-  "description": "A VS Code extension for Power Platform ToolBox",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
   "version": "0.1.0",
-  "publisher": "tbd-publisher",
+  "publisher": "PowerPlatformToolBox",
+  "license": "GPL-3.0",
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#742774",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PowerPlatformToolBox/vscode-extension"
+  },
+  "homepage": "https://github.com/PowerPlatformToolBox/vscode-extension#readme",
+  "bugs": {
+    "url": "https://github.com/PowerPlatformToolBox/vscode-extension/issues"
+  },
+  "keywords": [
+    "power platform",
+    "dataverse",
+    "dynamics 365",
+    "power apps",
+    "connections",
+    "toolbox"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -17,7 +39,7 @@
       "activitybar": [
         {
           "id": "pptb-explorer",
-          "title": "Power Platform ToolBox",
+          "title": "%viewsContainer.pptbExplorer.title%",
           "icon": "./resources/icon.svg"
         }
       ]
@@ -26,134 +48,135 @@
       "pptb-explorer": [
         {
           "id": "pptb.connectionsView",
-          "name": "Connections"
+          "name": "%view.connectionsView.name%"
         },
         {
           "id": "pptb.installedToolsView",
-          "name": "Installed Tools"
+          "name": "%view.installedToolsView.name%"
         },
         {
           "id": "pptb.marketplaceView",
-          "name": "Marketplace"
+          "name": "%view.marketplaceView.name%"
         }
       ]
     },
     "commands": [
       {
         "command": "pptb.connections.add",
-        "title": "Add Connection",
-        "category": "PPTB",
+        "title": "%command.connections.add.title%",
+        "category": "%command.category%",
         "icon": "$(add)"
       },
       {
         "command": "pptb.connections.edit",
-        "title": "Edit Connection",
-        "category": "PPTB"
+        "title": "%command.connections.edit.title%",
+        "category": "%command.category%"
       },
       {
         "command": "pptb.connections.delete",
-        "title": "Delete Connection",
-        "category": "PPTB"
+        "title": "%command.connections.delete.title%",
+        "category": "%command.category%",
+        "icon": "$(trash)"
       },
       {
         "command": "pptb.connections.connect",
-        "title": "Connect to Dataverse",
-        "category": "PPTB",
+        "title": "%command.connections.connect.title%",
+        "category": "%command.category%",
         "icon": "$(plug)"
       },
       {
         "command": "pptb.connections.disconnect",
-        "title": "Disconnect",
-        "category": "PPTB",
+        "title": "%command.connections.disconnect.title%",
+        "category": "%command.category%",
         "icon": "$(debug-disconnect)"
       },
       {
-        "command": "pptb.connections.delete",
-        "title": "Delete Connection",
-        "category": "PPTB",
-        "icon": "$(trash)"
-      },
-      {
         "command": "pptb.connections.test",
-        "title": "Test Connection",
-        "category": "PPTB"
+        "title": "%command.connections.test.title%",
+        "category": "%command.category%"
       },
       {
         "command": "pptb.connections.refresh",
-        "title": "Refresh Connections",
-        "category": "PPTB",
+        "title": "%command.connections.refresh.title%",
+        "category": "%command.category%",
         "icon": "$(refresh)"
       },
       {
         "command": "pptb.connections.export",
-        "title": "Export Connections",
-        "category": "PPTB",
+        "title": "%command.connections.export.title%",
+        "category": "%command.category%",
         "icon": "$(export)"
       },
       {
         "command": "pptb.connections.import",
-        "title": "Import Connections",
-        "category": "PPTB",
+        "title": "%command.connections.import.title%",
+        "category": "%command.category%",
         "icon": "$(import)"
       },
       {
         "command": "pptb.tools.refresh",
-        "title": "Refresh Installed Tools",
-        "category": "PPTB",
+        "title": "%command.tools.refresh.title%",
+        "category": "%command.category%",
         "icon": "$(refresh)"
       },
       {
         "command": "pptb.tools.uninstall",
-        "title": "Uninstall Tool",
-        "category": "PPTB",
+        "title": "%command.tools.uninstall.title%",
+        "category": "%command.category%",
         "icon": "$(trash)"
       },
       {
         "command": "pptb.marketplace.refresh",
-        "title": "Refresh Marketplace",
-        "category": "PPTB",
+        "title": "%command.marketplace.refresh.title%",
+        "category": "%command.category%",
         "icon": "$(refresh)"
       },
       {
         "command": "pptb.marketplace.install",
-        "title": "Install Tool",
-        "category": "PPTB",
+        "title": "%command.marketplace.install.title%",
+        "category": "%command.category%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "pptb.connections.openEnvironment",
-        "title": "Open Environment",
-        "category": "PPTB",
+        "title": "%command.connections.openEnvironment.title%",
+        "category": "%command.category%",
         "icon": "$(globe)"
       },
       {
         "command": "pptb.connections.showDetails",
-        "title": "Show Connection Details",
-        "category": "PPTB",
+        "title": "%command.connections.showDetails.title%",
+        "category": "%command.category%",
         "icon": "$(info)"
       },
       {
         "command": "pptb.connections.forget",
-        "title": "Forget Connection on current Workspace",
-        "category": "PPTB"
+        "title": "%command.connections.forget.title%",
+        "category": "%command.category%"
       },
       {
         "command": "pptb.tools.launch",
-        "title": "Launch Tool",
-        "category": "PPTB",
+        "title": "%command.tools.launch.title%",
+        "category": "%command.category%",
         "icon": "$(run)"
       },
       {
         "command": "pptb.tools.browse",
-        "title": "Browse Installed Tools",
-        "category": "PPTB",
+        "title": "%command.tools.browse.title%",
+        "category": "%command.category%",
         "icon": "$(list-flat)"
       },
       {
         "command": "pptb.marketplace.uninstall",
-        "title": "Uninstall Tool",
-        "category": "PPTB",
+        "title": "%command.marketplace.uninstall.title%",
+        "category": "%command.category%",
         "icon": "$(trash)"
+      },
+      {
+        "command": "pptb.marketplace.browse",
+        "title": "%command.marketplace.browse.title%",
+        "category": "%command.category%",
+        "icon": "$(list-flat)"
       }
     ],
     "menus": {
@@ -192,6 +215,11 @@
         {
           "command": "pptb.tools.refresh",
           "when": "view == pptb.installedToolsView",
+          "group": "navigation"
+        },
+        {
+          "command": "pptb.marketplace.browse",
+          "when": "view == pptb.marketplaceView",
           "group": "navigation"
         },
         {
@@ -286,7 +314,7 @@
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",
     "pretest": "npm run compile-tests",
-    "lint": "eslint src",
+    "lint": "eslint src --ext .ts,.tsx",
     "test": "node ./out/test/runTest.js",
     "format": "prettier --write src"
   },
@@ -304,8 +332,11 @@
     "@types/uuid": "^10.0.0",
     "@types/vscode": "^1.85.0",
     "@types/webpack-env": "^1.18.4",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "css-loader": "^7.1.2",
     "dotenv": "^17.4.2",
+    "eslint": "^8.57.1",
     "prettier": "3.9.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

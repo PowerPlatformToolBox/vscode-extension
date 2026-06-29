@@ -145,6 +145,24 @@ export class ToolRegistryManager {
     }
 
     /**
+     * Fetch a single tool from the registry by its ID.
+     * Returns `null` if the tool is not found or the client is not configured.
+     */
+    async getToolById(id: string): Promise<RegistryTool | null> {
+        if (!this.client) {
+            return null;
+        }
+
+        const { data, error } = await this.client.from("tools").select("*").eq("id", id).single();
+
+        if (error || !data) {
+            return null;
+        }
+
+        return mapRow(data as Record<string, unknown>);
+    }
+
+    /**
      * Return the deduplicated list of all capability tags present across every
      * tool in the registry.
      *

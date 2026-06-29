@@ -14,9 +14,11 @@ type OpenManagers = {
     powerPlatformManager?: PowerPlatformManager;
 };
 
+export type ToolHostView = "installed" | "marketplace";
+
 /**
  * Manages the WebviewPanel that shows the "PPTB Tool List".
- * Handles listing installed tools and launching individual tool panels.
+ * Handles listing installed tools, the marketplace, and launching individual tool panels.
  */
 export class ToolHostPanel {
     private static currentPanel: ToolHostPanel | undefined;
@@ -28,19 +30,19 @@ export class ToolHostPanel {
     private readonly managers?: OpenManagers;
     private disposables: vscode.Disposable[] = [];
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, toolRegistryManager: ToolRegistryManager, toolManager: ToolManager, managers?: OpenManagers) {
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, toolRegistryManager: ToolRegistryManager, toolManager: ToolManager, initialView: ToolHostView, managers?: OpenManagers) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.toolManager = toolManager;
         this.toolRegistryManager = toolRegistryManager;
         this.managers = managers;
 
-        this.panel.webview.html = this.getHtmlForWebview(this.panel.webview);
+        this.panel.webview.html = this.getHtmlForWebview(this.panel.webview, initialView);
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
         this.panel.webview.onDidReceiveMessage(
-            (message: { type: string; toolId?: string }) => {
+            (message: { type: string; toolId?: string; search?: string; page?: number }) => {
                 this.handleMessage(message).catch((err: unknown) => {
                     const msg = err instanceof Error ? err.message : String(err);
                     logger.error("ToolHostPanel message handler error:", msg);
@@ -52,13 +54,15 @@ export class ToolHostPanel {
     }
 
     /**
-     * Open (or reveal) the tool list panel.
+     * Open (or reveal) the tool list panel, switching to the requested view.
      */
-    static open(extensionUri: vscode.Uri, toolRegistryManager: ToolRegistryManager, toolManager: ToolManager, managers?: OpenManagers): void {
+    static open(extensionUri: vscode.Uri, toolRegistryManager: ToolRegistryManager, toolManager: ToolManager, initialView: ToolHostView = "installed", managers?: OpenManagers): void {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
 
         if (ToolHostPanel.currentPanel) {
             ToolHostPanel.currentPanel.panel.reveal(column ?? vscode.ViewColumn.One);
+            // Switch to the requested tab in the already-open panel
+            void ToolHostPanel.currentPanel.panel.webview.postMessage({ type: "set-active-view", view: initialView });
             return;
         }
 
@@ -68,7 +72,7 @@ export class ToolHostPanel {
             retainContextWhenHidden: true,
         });
 
-        ToolHostPanel.currentPanel = new ToolHostPanel(panel, extensionUri, toolRegistryManager, toolManager, managers);
+        ToolHostPanel.currentPanel = new ToolHostPanel(panel, extensionUri, toolRegistryManager, toolManager, initialView, managers);
     }
 
     dispose(): void {
@@ -80,7 +84,7 @@ export class ToolHostPanel {
         this.disposables = [];
     }
 
-    private async handleMessage(message: { type: string; toolId?: string }): Promise<void> {
+    private async handleMessage(message: { type: string; toolId?: string; search?: string; page?: number }): Promise<void> {
         switch (message.type) {
             case "get-installed-tools": {
                 const installedTools = this.toolManager.getAll();
@@ -90,10 +94,69 @@ export class ToolHostPanel {
                 });
                 break;
             }
+            case "get-marketplace-tools": {
+                try {
+                    const result = await this.toolRegistryManager.getTools({
+                        search: message.search,
+                        page: message.page ?? 1,
+                    });
+                    const installedIds = new Set(this.toolManager.getAll().map((t) => t.id));
+                    this.panel.webview.postMessage({
+                        type: "marketplace-tools",
+                        tools: result.tools,
+                        total: result.total,
+                        installedIds: [...installedIds],
+                    });
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    logger.error("ToolHostPanel get-marketplace-tools error:", msg);
+                    this.panel.webview.postMessage({ type: "marketplace-error", message: msg });
+                }
+                break;
+            }
             case "launch-tool": {
                 const toolId = message.toolId;
                 if (toolId) {
                     ToolPanel.open(this.extensionUri, toolId, this.toolManager, this.toolRegistryManager, this.managers);
+                }
+                break;
+            }
+            case "install-tool": {
+                const toolId = message.toolId;
+                if (!toolId) {
+                    break;
+                }
+                const registryTool = await this.toolRegistryManager.getToolById(toolId).catch(() => null);
+                if (!registryTool) {
+                    this.panel.webview.postMessage({ type: "install-error", toolId, message: "Tool not found in registry." });
+                    break;
+                }
+                try {
+                    await vscode.window.withProgress(
+                        { location: vscode.ProgressLocation.Notification, title: `Installing "${registryTool.name}"…`, cancellable: false },
+                        (progress) => this.toolManager.install(registryTool, (msg) => progress.report({ message: msg })),
+                    );
+                    vscode.window.showInformationMessage(`"${registryTool.name}" installed successfully.`);
+                    this.panel.webview.postMessage({ type: "install-done", toolId });
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    vscode.window.showErrorMessage(`Install failed: ${msg}`);
+                    this.panel.webview.postMessage({ type: "install-error", toolId, message: msg });
+                }
+                break;
+            }
+            case "uninstall-tool": {
+                const toolId = message.toolId;
+                if (!toolId) {
+                    break;
+                }
+                const tool = this.toolManager.getAll().find((t) => t.id === toolId);
+                const name = tool?.name ?? toolId;
+                const confirm = await vscode.window.showWarningMessage(`Uninstall "${name}"? This cannot be undone.`, { modal: true }, "Uninstall");
+                if (confirm === "Uninstall") {
+                    await this.toolManager.uninstall(toolId);
+                    vscode.window.showInformationMessage(`"${name}" uninstalled.`);
+                    this.panel.webview.postMessage({ type: "uninstall-done", toolId });
                 }
                 break;
             }
@@ -103,7 +166,7 @@ export class ToolHostPanel {
         }
     }
 
-    private getHtmlForWebview(webview: vscode.Webview): string {
+    private getHtmlForWebview(webview: vscode.Webview, initialView: ToolHostView): string {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "dist", "webviews", "toolHost.js"));
 
         const nonce = getNonce();
@@ -118,6 +181,7 @@ export class ToolHostPanel {
 </head>
 <body>
   <div id="root"></div>
+  <script nonce="${nonce}">window.__pptbInitialView = "${initialView}";</script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

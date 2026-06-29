@@ -1,0 +1,58 @@
+name: Release
+
+on:
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        name: Package and Publish
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Production build
+              run: npm run package
+
+            - name: Package VSIX
+              run: npx @vscode/vsce package --no-dependencies
+              env:
+                  PPTB_SUPABASE_URL: ${{ secrets.PPTB_SUPABASE_URL }}
+                  PPTB_SUPABASE_ANON_KEY: ${{ secrets.PPTB_SUPABASE_ANON_KEY }}
+
+            - name: Upload VSIX artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: vsix
+                  path: "*.vsix"
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: "*.vsix"
+                  generate_release_notes: true
+
+            - name: Publish to VS Code Marketplace
+              run: npx @vscode/vsce publish --no-dependencies --packagePath *.vsix
+              env:
+                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+            # TODO: for future rollout
+            # - name: Publish to Open VSX Registry
+            #   run: npx ovsx publish *.vsix
+            #   env:
+            #       OVSX_PAT: ${{ secrets.OVSX_PAT }}
+            #   continue-on-error: true
