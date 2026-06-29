@@ -9,7 +9,9 @@ export class InstalledToolTreeItem extends vscode.TreeItem {
     this.tool = tool;
     this.description = tool.publisher ?? tool.version;
     this.tooltip = tool.description ?? tool.name;
-    this.iconPath = new vscode.ThemeIcon("package");
+    this.iconPath = tool.icon
+      ? vscode.Uri.parse(tool.icon)
+      : new vscode.ThemeIcon("package");
     this.contextValue = "pptb.installedTool";
   }
 }

@@ -57,18 +57,21 @@
       },
       {
         "command": "pptb.connections.connect",
-        "title": "Connect",
-        "category": "PPTB"
+        "title": "Connect to Dataverse",
+        "category": "PPTB",
+        "icon": "$(plug)"
       },
       {
         "command": "pptb.connections.disconnect",
         "title": "Disconnect",
-        "category": "PPTB"
+        "category": "PPTB",
+        "icon": "$(debug-disconnect)"
       },
       {
-        "command": "pptb.connections.setActive",
-        "title": "Set Active Connection",
-        "category": "PPTB"
+        "command": "pptb.connections.delete",
+        "title": "Delete Connection",
+        "category": "PPTB",
+        "icon": "$(trash)"
       },
       {
         "command": "pptb.connections.test",
@@ -116,6 +119,41 @@
         "title": "Install Tool",
         "category": "PPTB",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "pptb.connections.openEnvironment",
+        "title": "Open Environment",
+        "category": "PPTB",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "pptb.connections.showDetails",
+        "title": "Show Connection Details",
+        "category": "PPTB",
+        "icon": "$(info)"
+      },
+      {
+        "command": "pptb.connections.forget",
+        "title": "Forget Connection on current Workspace",
+        "category": "PPTB"
+      },
+      {
+        "command": "pptb.tools.launch",
+        "title": "Launch Tool",
+        "category": "PPTB",
+        "icon": "$(run)"
+      },
+      {
+        "command": "pptb.tools.browse",
+        "title": "Browse Installed Tools",
+        "category": "PPTB",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "pptb.marketplace.uninstall",
+        "title": "Uninstall Tool",
+        "category": "PPTB",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -147,6 +185,11 @@
           "group": "2_importexport@2"
         },
         {
+          "command": "pptb.tools.browse",
+          "when": "view == pptb.installedToolsView",
+          "group": "navigation"
+        },
+        {
           "command": "pptb.tools.refresh",
           "when": "view == pptb.installedToolsView",
           "group": "navigation"
@@ -159,14 +202,19 @@
       ],
       "view/item/context": [
         {
-          "command": "pptb.tools.uninstall",
-          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
-          "group": "1_manage@1"
+          "command": "pptb.connections.connect",
+          "when": "view == pptb.connectionsView && viewItem == pptb.connection.inactive",
+          "group": "inline@1"
         },
         {
-          "command": "pptb.marketplace.install",
-          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
-          "group": "1_manage@1"
+          "command": "pptb.connections.disconnect",
+          "when": "view == pptb.connectionsView && viewItem == pptb.connection.active",
+          "group": "inline@1"
+        },
+        {
+          "command": "pptb.connections.delete",
+          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "group": "inline@2"
         },
         {
           "command": "pptb.connections.connect",
@@ -174,24 +222,59 @@
           "group": "1_connection@1"
         },
         {
-          "command": "pptb.connections.disconnect",
-          "when": "view == pptb.connectionsView && viewItem == pptb.connection.active",
-          "group": "1_connection@1"
-        },
-        {
-          "command": "pptb.connections.edit",
+          "command": "pptb.connections.openEnvironment",
           "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
           "group": "2_manage@1"
         },
         {
-          "command": "pptb.connections.test",
+          "command": "pptb.connections.showDetails",
           "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
           "group": "2_manage@2"
+        },
+        {
+          "command": "pptb.connections.forget",
+          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "group": "2_manage@3"
         },
         {
           "command": "pptb.connections.delete",
           "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
           "group": "3_delete@1"
+        },
+        {
+          "command": "pptb.tools.launch",
+          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "group": "inline@1"
+        },
+        {
+          "command": "pptb.tools.launch",
+          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "group": "1_manage@1"
+        },
+        {
+          "command": "pptb.tools.uninstall",
+          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "group": "2_manage@1"
+        },
+        {
+          "command": "pptb.marketplace.install",
+          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
+          "group": "inline@1"
+        },
+        {
+          "command": "pptb.marketplace.install",
+          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
+          "group": "1_manage@1"
+        },
+        {
+          "command": "pptb.marketplace.uninstall",
+          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
+          "group": "inline@1"
+        },
+        {
+          "command": "pptb.marketplace.uninstall",
+          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
+          "group": "1_manage@1"
         }
       ]
     }

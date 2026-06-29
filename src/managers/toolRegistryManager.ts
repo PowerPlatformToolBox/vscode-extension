@@ -18,7 +18,9 @@ export interface RegistryTool {
   /** Publisher / author of the tool. */
   publisher?: string;
   /** URL from which the tool binary/archive can be downloaded. */
-  downloadUrl?: string;
+  download?: string;
+  /** URL of the tool's icon image. */
+  icon?: string;
   /**
    * Relative path inside the tool's installation directory that points to the
    * main executable (e.g. "bin/pac" or "pac.exe").
@@ -69,10 +71,15 @@ const PAGE_SIZE = 20;
  */
 export class ToolRegistryManager {
   private readonly client: SupabaseClient | null;
+  private readonly output: vscode.OutputChannel;
 
-  constructor() {
+  constructor(output: vscode.OutputChannel) {
+    this.output = output;
     const url: string = process.env.PPTB_SUPABASE_URL ?? "";
     const key: string = process.env.PPTB_SUPABASE_ANON_KEY ?? "";
+
+    this.output.appendLine(`[Registry] URL  : ${url || "(not set)"}`);
+    this.output.appendLine(`[Registry] Key  : ${key ? "(set)" : "(not set)"}`);
 
     if (!url || !key) {
       vscode.window.showInformationMessage(
@@ -130,12 +137,19 @@ export class ToolRegistryManager {
     const { data, error, count } = await query;
 
     if (error) {
-      console.error("ToolRegistryManager.getTools error:", error.message);
+      this.output.appendLine(`[Registry] getTools error: ${error.message}`);
+      this.output.appendLine(`[Registry] error details: ${JSON.stringify(error)}`);
+      this.output.show(true);
       return { tools: [], total: 0 };
     }
 
+    this.output.appendLine(`[Registry] getTools returned ${count ?? 0} total rows, ${(data ?? []).length} in page`);
+    if ((data ?? []).length > 0) {
+      this.output.appendLine(`[Registry] First row keys: ${Object.keys((data as Record<string, unknown>[])[0]).join(", ")}`);
+    }
+
     return {
-      tools: (data ?? []) as RegistryTool[],
+      tools: (data ?? []).map(mapRow),
       total: count ?? 0,
     };
   }
@@ -151,21 +165,22 @@ export class ToolRegistryManager {
       return [];
     }
 
+    // Select all columns; we filter capability tags client-side to avoid
+    // column-name guessing issues.
     const { data, error } = await this.client
       .from("tools")
-      .select("capabilityTags");
+      .select("*");
 
     if (error) {
-      console.error(
-        "ToolRegistryManager.getKnownCapabilityTags error:",
-        error.message
-      );
+      this.output.appendLine(`[Registry] getKnownCapabilityTags error: ${error.message}`);
       return [];
     }
 
     const tagSet = new Set<string>();
     for (const row of data ?? []) {
-      const tags = (row as { capabilityTags?: unknown }).capabilityTags;
+      const r = row as Record<string, unknown>;
+      // Accept both naming conventions
+      const tags = r["capabilityTags"] ?? r["capability_tags"];
       if (Array.isArray(tags)) {
         for (const tag of tags) {
           if (typeof tag === "string" && tag.length > 0) {
@@ -177,4 +192,32 @@ export class ToolRegistryManager {
 
     return Array.from(tagSet).sort();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Row mapping — handles both camelCase and snake_case column names
+// ---------------------------------------------------------------------------
+
+function str(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+function mapRow(row: Record<string, unknown>): RegistryTool {
+  return {
+    id: str(row["id"]) ?? "",
+    name: str(row["name"]) ?? "",
+    version: str(row["version"]) ?? "0.0.0",
+    description: str(row["description"]),
+    publisher: str(row["publisher"]),
+    download: str(row["download"]),
+    icon: str(row["icon"]),
+    executableRelativePath:
+      str(row["executableRelativePath"]) ??
+      str(row["executable_relative_path"]),
+    category: str(row["category"]),
+    capabilityTags:
+      (Array.isArray(row["capabilityTags"]) ? row["capabilityTags"] :
+       Array.isArray(row["capability_tags"]) ? row["capability_tags"] :
+       undefined) as string[] | undefined,
+  };
 }

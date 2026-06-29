@@ -1,11 +1,13 @@
-import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
-import { ToolRegistryManager } from "../managers/toolRegistryManager";
-import { ToolManager } from "../managers/toolManager";
-import { TerminalManager } from "../managers/terminalManager";
-import type { ConnectionsManager, Connection } from "../managers/connectionsManager";
+import * as vscode from "vscode";
+import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
+import { TerminalManager } from "../managers/terminalManager";
+import { ToolManager } from "../managers/toolManager";
+import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { getNonce } from "../utils/webview";
 
 type ApiMessage = {
@@ -80,12 +82,16 @@ export class ToolHostPanel {
   private readonly eventHistory: ToolBoxEventPayload[] = [];
   private disposables: vscode.Disposable[] = [];
 
+  /** Tool ID to navigate to on first `get-installed-tools` request. Consumed once. */
+  private pendingToolId?: string;
+
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
     toolRegistryManager: ToolRegistryManager,
     toolManager: ToolManager,
-    managers?: OpenManagers
+    managers?: OpenManagers,
+    initialToolId?: string
   ) {
     this.panel = panel;
     this.extensionUri = extensionUri;
@@ -94,6 +100,7 @@ export class ToolHostPanel {
     this.connectionsManager = managers?.connectionsManager;
     this.dataverseManager = managers?.dataverseManager;
     this.powerPlatformManager = managers?.powerPlatformManager;
+    this.pendingToolId = initialToolId;
 
     this.panel.webview.html = this.getHtmlForWebview(this.panel.webview);
 
@@ -129,12 +136,14 @@ export class ToolHostPanel {
 
   /**
    * Open (or reveal) the tool host panel.
+   * Pass `initialToolId` to navigate directly to a specific tool on open.
    */
   static open(
     extensionUri: vscode.Uri,
     toolRegistryManager: ToolRegistryManager,
     toolManager: ToolManager,
-    managers?: OpenManagers
+    managers?: OpenManagers,
+    initialToolId?: string
   ): void {
     const column = vscode.window.activeTextEditor
       ? vscode.window.activeTextEditor.viewColumn
@@ -142,6 +151,14 @@ export class ToolHostPanel {
 
     if (ToolHostPanel.currentPanel) {
       ToolHostPanel.currentPanel.panel.reveal(column ?? vscode.ViewColumn.One);
+      // If a specific tool was requested, tell the webview to navigate to it
+      if (initialToolId) {
+        ToolHostPanel.currentPanel.panel.webview.postMessage({
+          type: "navigate-to-tool",
+          toolId: initialToolId,
+          tool: toolManager.getById(initialToolId),
+        });
+      }
       return;
     }
 
@@ -154,6 +171,7 @@ export class ToolHostPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, "dist", "webviews"),
           vscode.Uri.joinPath(extensionUri, "src", "polyfill"),
+          toolManager.toolsDirUri,
         ],
         retainContextWhenHidden: true,
       }
@@ -164,7 +182,8 @@ export class ToolHostPanel {
       extensionUri,
       toolRegistryManager,
       toolManager,
-      managers
+      managers,
+      initialToolId
     );
   }
 
@@ -218,9 +237,13 @@ export class ToolHostPanel {
       }
       case "get-installed-tools": {
         const installedTools = this.toolManager.getAll();
+        // Consume the pending toolId — send it once then clear
+        const initialToolId = this.pendingToolId;
+        this.pendingToolId = undefined;
         this.panel.webview.postMessage({
           type: "installed-tools",
           tools: installedTools,
+          initialToolId,
         });
         break;
       }
@@ -780,10 +803,73 @@ export class ToolHostPanel {
           : this.toolContext.secondaryConnectionId,
     };
 
+    // Build the tool's HTML with the polyfill injected so the tool can use
+    // window.toolboxAPI, and with a <base href> so its relative assets resolve.
+    let toolHtml: string | null = null;
+    if (this.toolContext.toolId) {
+      const tool = this.toolManager.getById(this.toolContext.toolId);
+      if (tool) {
+        const candidates: string[] = [];
+        if (tool.executableRelativePath) {
+          candidates.push(path.join(tool.toolPath, tool.executableRelativePath));
+        }
+        candidates.push(
+          path.join(tool.toolPath, "dist", "index.html"),
+          path.join(tool.toolPath, "index.html")
+        );
+
+        for (const candidate of candidates) {
+          if (!candidate.endsWith(".html") || !fs.existsSync(candidate)) {
+            continue;
+          }
+          try {
+            // Derive the base URI from the HTML file's own webview URI so the
+            // URI goes through VS Code's own encoding machinery (avoids
+            // percent-encoding mismatches for paths with spaces, etc.).
+            const htmlWebviewUri = this.panel.webview
+              .asWebviewUri(vscode.Uri.file(candidate))
+              .toString();
+            const baseUri = htmlWebviewUri.substring(
+              0,
+              htmlWebviewUri.lastIndexOf("/")
+            );
+
+            const polyfillPath = path.join(
+              this.extensionUri.fsPath,
+              "src", "polyfill", "toolboxAPI.js"
+            );
+            const polyfillContent = fs.existsSync(polyfillPath)
+              ? fs.readFileSync(polyfillPath, "utf8")
+              : "";
+
+            let html = fs.readFileSync(candidate, "utf8");
+
+            // Inject <base href> so relative paths (CSS/JS/images) resolve
+            // correctly, and inject the polyfill so window.toolboxAPI works.
+            const injection =
+              `<base href="${baseUri}/">\n` +
+              `<script>\n${polyfillContent}\n</script>`;
+
+            if (/<head[^>]*>/i.test(html)) {
+              html = html.replace(/(<head[^>]*>)/i, `$1\n${injection}`);
+            } else {
+              html = `<!DOCTYPE html><html><head>${injection}</head><body>${html}</body></html>`;
+            }
+
+            toolHtml = html;
+          } catch {
+            // ignore — toolHtml stays null
+          }
+          break;
+        }
+      }
+    }
+
     this.panel.webview.postMessage({
       source: "pptb-host",
       type: "pptb:context",
       context: this.toolContext,
+      toolHtml,
     });
   }
 
@@ -839,7 +925,7 @@ export class ToolHostPanel {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${webview.cspSource} 'unsafe-inline'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data: blob:; font-src ${webview.cspSource} https: data:; connect-src ${webview.cspSource} https:; frame-src ${webview.cspSource};">
   <title>PPTB Tools</title>
 </head>
 <body>

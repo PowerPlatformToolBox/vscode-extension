@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as http from "http";
 import * as https from "https";
@@ -21,7 +22,9 @@ export interface Tool {
   /** Publisher / author of the tool. */
   publisher?: string;
   /** URL from which the tool binary/archive can be downloaded. */
-  downloadUrl?: string;
+  download?: string;
+  /** URL of the tool's icon image. */
+  icon?: string;
   /**
    * Relative path inside the tool's installation directory that points to the
    * main executable (e.g. "bin/pac" or "pac.exe").
@@ -69,12 +72,20 @@ export class ToolManager implements vscode.Disposable {
   /** Absolute path to the root tools directory. */
   readonly toolsDir: string;
 
+  /** VS Code URI for the root tools directory (use this in localResourceRoots). */
+  readonly toolsDirUri: vscode.Uri;
+
   /** Absolute path to the installed-tools manifest file. */
   readonly manifestPath: string;
 
+  private readonly output: vscode.OutputChannel;
+
   constructor(context: vscode.ExtensionContext) {
-    this.toolsDir = path.join(context.globalStorageUri.fsPath, "tools");
+    this.toolsDirUri = vscode.Uri.joinPath(context.globalStorageUri, "tools");
+    this.toolsDir = this.toolsDirUri.fsPath;
     this.manifestPath = path.join(this.toolsDir, "installed.json");
+    this.output = vscode.window.createOutputChannel("PPTB Tool Manager");
+    context.subscriptions.push(this.output);
   }
 
   // ---------------------------------------------------------------------------
@@ -111,7 +122,7 @@ export class ToolManager implements vscode.Disposable {
   /**
    * Install a tool.
    *
-   * If `tool.downloadUrl` is provided the file is downloaded from that URL
+   * If `tool.download` is provided the file is downloaded from that URL
    * into the tool's dedicated sub-directory before the manifest is updated.
    * If no URL is supplied the directory is still created and the manifest is
    * updated so that callers that place files manually (e.g. extracted from a
@@ -121,10 +132,16 @@ export class ToolManager implements vscode.Disposable {
    *
    * @throws If the download fails or the destination cannot be written.
    */
-  async install(tool: Tool): Promise<InstalledTool> {
+  async install(tool: Tool, onProgress?: (message: string) => void): Promise<InstalledTool> {
+    this.output.show(true);
+    this.output.appendLine(`\n[Install] ${tool.name} v${tool.version}`);
+    this.output.appendLine(`  toolsDir : ${this.toolsDir}`);
+this.output.appendLine(`  download    : ${tool.download ?? "(none)"}`);
+
     this.ensureToolsDir();
 
     const toolDir = this.getToolPath(tool.id);
+    this.output.appendLine(`  toolDir  : ${toolDir}`);
 
     // Remove any previous installation directory for this tool
     if (fs.existsSync(toolDir)) {
@@ -133,11 +150,35 @@ export class ToolManager implements vscode.Disposable {
     fs.mkdirSync(toolDir, { recursive: true });
 
     // Download the tool file when a URL is provided
-    if (tool.downloadUrl) {
-      const fileName = this.fileNameFromUrl(tool.downloadUrl);
+    if (tool.download) {
+      const fileName = this.fileNameFromUrl(tool.download);
       const destPath = path.join(toolDir, fileName);
-      await this.download(tool.downloadUrl, destPath);
+
+      onProgress?.("Downloading…");
+      this.output.appendLine(`  Downloading ${fileName}...`);
+      await this.download(tool.download, destPath);
+
+      const downloadedSize = fs.existsSync(destPath)
+        ? fs.statSync(destPath).size
+        : 0;
+      this.output.appendLine(`  Download complete. Size: ${downloadedSize} bytes`);
+
+      // Extract .tar.gz / .tgz archives and remove the archive
+      if (destPath.endsWith(".tar.gz") || destPath.endsWith(".tgz")) {
+        onProgress?.("Extracting\u2026");
+        this.output.appendLine(`  Extracting ${fileName}...`);
+        await this.extractTarGz(destPath, toolDir);
+        this.output.appendLine("  Extraction complete.");
+        try { fs.unlinkSync(destPath); } catch { /* ignore */ }
+      }
+    } else {
+      this.output.appendLine("  WARNING: no download URL — tool directory will be empty!");
     }
+
+    // Log what ended up in the tool directory
+    const files = fs.existsSync(toolDir) ? fs.readdirSync(toolDir) : [];
+    this.output.appendLine(`  Files in toolDir (${files.length}): ${files.join(", ") || "(none)"}`);
+
 
     const installed: InstalledTool = {
       ...tool,
@@ -212,6 +253,36 @@ export class ToolManager implements vscode.Disposable {
   private writeManifest(manifest: Manifest): void {
     this.ensureToolsDir();
     fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+  }
+
+  /**
+   * Extract a .tar.gz archive into the given destination directory using the
+   * system `tar` command (available on macOS, Linux, and Windows 10+).
+   */
+  private extractTarGz(archivePath: string, destDir: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn("tar", ["-xzf", archivePath, "-C", destDir]);
+
+      const errChunks: Buffer[] = [];
+      proc.stderr?.on("data", (chunk: Buffer) => errChunks.push(chunk));
+
+      proc.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          const stderr = Buffer.concat(errChunks).toString().trim();
+          reject(
+            new Error(
+              `tar extraction exited with code ${code}${stderr ? ": " + stderr : ""}`
+            )
+          );
+        }
+      });
+
+      proc.on("error", (err) => {
+        reject(new Error(`Failed to start tar: ${err.message}`));
+      });
+    });
   }
 
   /**

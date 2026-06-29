@@ -5,6 +5,7 @@ import { DataverseManager } from "./managers/dataverseManager";
 import { ToolManager } from "./managers/toolManager";
 import { ToolRegistryManager } from "./managers/toolRegistryManager";
 import { ConnectionPanel } from "./panels/connectionPanel";
+import { ToolHostPanel } from "./panels/toolHostPanel";
 import { ConnectionsTreeDataProvider, ConnectionTreeItem } from "./providers/connectionsTreeDataProvider";
 import { InstalledToolsTreeDataProvider, InstalledToolTreeItem } from "./providers/installedToolsTreeDataProvider";
 import { MarketplaceToolTreeItem, MarketplaceTreeDataProvider } from "./providers/marketplaceTreeDataProvider";
@@ -31,7 +32,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // ── Tool managers ─────────────────────────────────────────────────────────
   const toolManager = new ToolManager(context);
-  const toolRegistryManager = new ToolRegistryManager();
+  const registryOutput = vscode.window.createOutputChannel("PPTB Registry");
+  context.subscriptions.push(registryOutput);
+  const toolRegistryManager = new ToolRegistryManager(registryOutput);
 
   // ── Installed Tools tree view ─────────────────────────────────────────────
   const installedToolsProvider = new InstalledToolsTreeDataProvider(toolManager);
@@ -41,7 +44,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   // ── Marketplace tree view ─────────────────────────────────────────────────
-  const marketplaceProvider = new MarketplaceTreeDataProvider(toolRegistryManager);
+  const marketplaceProvider = new MarketplaceTreeDataProvider(toolRegistryManager, toolManager);
   const marketplaceView = vscode.window.createTreeView("pptb.marketplaceView", {
     treeDataProvider: marketplaceProvider,
     showCollapseAll: false,
@@ -217,6 +220,106 @@ export function activate(context: vscode.ExtensionContext): void {
     () => marketplaceProvider.refresh()
   );
 
+  // Open connection URL in system browser
+  const openEnvCmd = vscode.commands.registerCommand(
+    "pptb.connections.openEnvironment",
+    (treeItem?: ConnectionTreeItem) => {
+      const url = treeItem?.connection?.url;
+      if (url) {
+        vscode.env.openExternal(vscode.Uri.parse(url));
+      }
+    }
+  );
+
+  // Show connection details (opens edit panel)
+  const showDetailsCmd = vscode.commands.registerCommand(
+    "pptb.connections.showDetails",
+    (treeItem?: ConnectionTreeItem) => {
+      const connection = treeItem?.connection;
+      if (!connection) {
+        vscode.window.showWarningMessage("No connection selected.");
+        return;
+      }
+      ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
+    }
+  );
+
+  // Forget connection on workspace (clears cached tokens without deleting)
+  const forgetCmd = vscode.commands.registerCommand(
+    "pptb.connections.forget",
+    async (treeItem?: ConnectionTreeItem) => {
+      const connection = treeItem?.connection;
+      if (!connection) {
+        vscode.window.showWarningMessage("No connection selected.");
+        return;
+      }
+      await connectionsManager.update({
+        ...connection,
+        accessToken: undefined,
+        refreshToken: undefined,
+        msalAccountId: undefined,
+        tokenExpiry: undefined,
+        powerPlatformAccessToken: undefined,
+        powerPlatformTokenExpiry: undefined,
+      });
+      if (connectionsManager.getActiveConnection()?.id === connection.id) {
+        await connectionsManager.clearActiveConnection();
+      }
+      vscode.window.showInformationMessage(
+        `Connection "${connection.name}" forgotten — cached tokens cleared.`
+      );
+    }
+  );
+
+  // Launch a specific tool directly in the ToolHostPanel
+  const launchToolCmd = vscode.commands.registerCommand(
+    "pptb.tools.launch",
+    (item?: InstalledToolTreeItem) => {
+      ToolHostPanel.open(
+        context.extensionUri,
+        toolRegistryManager,
+        toolManager,
+        { connectionsManager, dataverseManager },
+        item?.tool.id
+      );
+    }
+  );
+
+  // Open the ToolHostPanel showing the full list of installed tools
+  const browseToolsCmd = vscode.commands.registerCommand(
+    "pptb.tools.browse",
+    () => {
+      ToolHostPanel.open(
+        context.extensionUri,
+        toolRegistryManager,
+        toolManager,
+        { connectionsManager, dataverseManager }
+      );
+    }
+  );
+
+  // Uninstall a tool from the Marketplace view
+  const marketplaceUninstallCmd = vscode.commands.registerCommand(
+    "pptb.marketplace.uninstall",
+    async (item?: MarketplaceToolTreeItem) => {
+      if (!item?.registryTool) {
+        vscode.window.showWarningMessage("No tool selected.");
+        return;
+      }
+      const confirm = await vscode.window.showWarningMessage(
+        `Uninstall "${item.registryTool.name}"? This cannot be undone.`,
+        { modal: true },
+        "Uninstall"
+      );
+      if (confirm === "Uninstall") {
+        await toolManager.uninstall(item.registryTool.id);
+        vscode.window.showInformationMessage(
+          `"${item.registryTool.name}" uninstalled.`
+        );
+      }
+    }
+  );
+
   const installToolCmd = vscode.commands.registerCommand(
     "pptb.marketplace.install",
     async (item?: MarketplaceToolTreeItem) => {
@@ -231,7 +334,10 @@ export function activate(context: vscode.ExtensionContext): void {
             title: `Installing "${item.registryTool.name}"…`,
             cancellable: false,
           },
-          () => toolManager.install(item.registryTool!)
+          (progress) =>
+            toolManager.install(item.registryTool!, (message) =>
+              progress.report({ message })
+            )
         );
         vscode.window.showInformationMessage(
           `"${item.registryTool.name}" installed successfully.`
@@ -318,7 +424,13 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshInstalledCmd,
     uninstallToolCmd,
     refreshMarketplaceCmd,
-    installToolCmd
+    installToolCmd,
+    openEnvCmd,
+    showDetailsCmd,
+    forgetCmd,
+    launchToolCmd,
+    browseToolsCmd,
+    marketplaceUninstallCmd
   );
 }
 

@@ -96,6 +96,49 @@ const config = [
     ],
     devtool: "nosources-source-map",
   },
+  // Webview bundle — Tool Host
+  {
+    name: "webview-toolhost",
+    target: "web",
+    mode: "none",
+    entry: "./webviews/toolHost/src/index.tsx",
+    output: {
+      path: path.resolve(__dirname, "dist", "webviews"),
+      filename: "toolHost.js",
+    },
+    resolve: {
+      extensions: [".ts", ".tsx", ".js", ".jsx"],
+    },
+    module: {
+      rules: [
+        {
+          test: /\.tsx?$/,
+          exclude: /node_modules/,
+          use: [
+            {
+              loader: "ts-loader",
+              options: {
+                configFile: path.resolve(
+                  __dirname,
+                  "webviews/toolHost/tsconfig.json"
+                ),
+              },
+            },
+          ],
+        },
+        {
+          test: /\.css$/,
+          use: ["style-loader", "css-loader"],
+        },
+      ],
+    },
+    plugins: [
+      new webpack.DefinePlugin({
+        "process.env.NODE_ENV": JSON.stringify("development"),
+      }),
+    ],
+    devtool: "nosources-source-map",
+  },
 ];
 
 module.exports = config;

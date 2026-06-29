@@ -1,16 +1,21 @@
 import * as vscode from "vscode";
+import type { ToolManager } from "../managers/toolManager";
 import type { RegistryTool, ToolRegistryManager } from "../managers/toolRegistryManager";
 
 export class MarketplaceToolTreeItem extends vscode.TreeItem {
   readonly registryTool: RegistryTool | undefined;
 
-  constructor(tool: RegistryTool) {
+  constructor(tool: RegistryTool, isInstalled: boolean) {
     super(tool.name, vscode.TreeItemCollapsibleState.None);
     this.registryTool = tool;
     this.description = tool.publisher ?? tool.version;
     this.tooltip = tool.description ?? tool.name;
-    this.iconPath = new vscode.ThemeIcon("extensions");
-    this.contextValue = "pptb.marketplaceTool";
+    this.iconPath = tool.icon
+      ? vscode.Uri.parse(tool.icon)
+      : new vscode.ThemeIcon(isInstalled ? "check" : "extensions");
+    this.contextValue = isInstalled
+      ? "pptb.marketplaceTool.installed"
+      : "pptb.marketplaceTool";
   }
 }
 
@@ -35,8 +40,15 @@ export class MarketplaceTreeDataProvider
 
   private tools: RegistryTool[] = [];
   private state: "idle" | "loading" | "loaded" | "error" = "idle";
+  private errorMessage = "Unknown error";
 
-  constructor(private readonly registryManager: ToolRegistryManager) {}
+  constructor(
+    private readonly registryManager: ToolRegistryManager,
+    private readonly toolManager: ToolManager
+  ) {
+    // Re-render rows when a tool is installed or uninstalled
+    toolManager.onToolsChanged(() => this._onDidChangeTreeData.fire());
+  }
 
   refresh(): void {
     this.state = "idle";
@@ -59,8 +71,10 @@ export class MarketplaceTreeDataProvider
           this.state = "loaded";
           this._onDidChangeTreeData.fire();
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
           this.state = "error";
+          this.errorMessage = msg;
           this._onDidChangeTreeData.fire();
         });
       return [new PlaceholderTreeItem("Loading…")];
@@ -71,13 +85,15 @@ export class MarketplaceTreeDataProvider
     }
 
     if (this.state === "error") {
-      return [new PlaceholderTreeItem("Failed to load marketplace tools.")];
+      return [new PlaceholderTreeItem(`Error: ${this.errorMessage}`)];
     }
 
     if (this.tools.length === 0) {
       return [new PlaceholderTreeItem("No tools found.")];
     }
 
-    return this.tools.map((t) => new MarketplaceToolTreeItem(t));
+    return this.tools.map(
+      (t) => new MarketplaceToolTreeItem(t, this.toolManager.isInstalled(t.id))
+    );
   }
 }
