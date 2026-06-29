@@ -4,6 +4,7 @@ import * as http from "http";
 import * as https from "https";
 import * as path from "path";
 import * as vscode from "vscode";
+import { logger } from "../utils/logger";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -338,7 +339,7 @@ export class ToolManager implements vscode.Disposable {
                 fileStream.on("error", (err) => {
                     fs.unlink(destPath, (unlinkErr) => {
                         if (unlinkErr) {
-                            console.error(`Failed to clean up partial download at "${destPath}":`, unlinkErr);
+                            logger.error(`Failed to clean up partial download at "${destPath}":`, unlinkErr);
                         }
                     });
                     reject(err);
@@ -348,7 +349,7 @@ export class ToolManager implements vscode.Disposable {
                     fileStream.close();
                     fs.unlink(destPath, (unlinkErr) => {
                         if (unlinkErr) {
-                            console.error(`Failed to clean up partial download at "${destPath}":`, unlinkErr);
+                            logger.error(`Failed to clean up partial download at "${destPath}":`, unlinkErr);
                         }
                     });
                     reject(err);

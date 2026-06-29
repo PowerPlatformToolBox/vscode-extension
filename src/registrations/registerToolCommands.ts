@@ -4,6 +4,7 @@ import { DataverseManager } from "../managers/dataverseManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { ToolHostPanel } from "../panels/toolHostPanel";
+import { ToolPanel } from "../panels/toolPanel";
 import { InstalledToolsTreeDataProvider, InstalledToolTreeItem } from "../providers/installedToolsTreeDataProvider";
 import { MarketplaceToolTreeItem, MarketplaceTreeDataProvider } from "../providers/marketplaceTreeDataProvider";
 
@@ -33,7 +34,10 @@ export function registerToolCommands(
     const refreshMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.refresh", () => marketplaceProvider.refresh());
 
     const launchToolCmd = vscode.commands.registerCommand("pptb.tools.launch", (item?: InstalledToolTreeItem) => {
-        ToolHostPanel.open(context.extensionUri, toolRegistryManager, toolManager, { connectionsManager, dataverseManager }, item?.tool.id);
+        if (!item?.tool.id) {
+            return;
+        }
+        ToolPanel.open(context.extensionUri, item.tool.id, toolManager, toolRegistryManager, { connectionsManager, dataverseManager });
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
