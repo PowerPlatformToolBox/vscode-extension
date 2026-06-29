@@ -77,7 +77,7 @@ export class ToolPanel {
     private readonly eventHistory: ToolBoxEventPayload[] = [];
     private disposables: vscode.Disposable[] = [];
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers) {
+    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers, initialContext?: Partial<Pick<ToolContext, "connectionId" | "connectionUrl" | "secondaryConnectionId" | "secondaryConnectionUrl">>) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.toolManager = toolManager;
@@ -88,10 +88,10 @@ export class ToolPanel {
 
         this.toolContext = {
             toolId,
-            connectionUrl: null,
-            connectionId: null,
-            secondaryConnectionUrl: null,
-            secondaryConnectionId: null,
+            connectionUrl: initialContext?.connectionUrl ?? null,
+            connectionId: initialContext?.connectionId ?? null,
+            secondaryConnectionUrl: initialContext?.secondaryConnectionUrl ?? null,
+            secondaryConnectionId: initialContext?.secondaryConnectionId ?? null,
         };
 
         const toolForHtml = this.toolManager.getById(toolId);
@@ -134,8 +134,17 @@ export class ToolPanel {
     /**
      * Open (or reveal) a tool panel for the given toolId.
      * Each tool gets its own panel; launching the same tool again reveals it.
+     * Validates the active connection and prompts for a secondary connection when
+     * the tool's package.json declares `features.multiConnection`.
      */
     static open(extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers): void {
+        ToolPanel.openAsync(extensionUri, toolId, toolManager, toolRegistryManager, managers).catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error("ToolPanel.open error:", msg);
+        });
+    }
+
+    private static async openAsync(extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers): Promise<void> {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
 
         const existing = ToolPanel.panels.get(toolId);
@@ -144,14 +153,70 @@ export class ToolPanel {
             return;
         }
 
+        // Validate primary connection before launching
+        if (managers?.connectionsManager) {
+            const activeConnection = managers.connectionsManager.getActiveConnection();
+            if (!activeConnection) {
+                const action = await vscode.window.showErrorMessage(
+                    "No active connection. Please connect to an environment before launching a tool.",
+                    "Add Connection",
+                );
+                if (action === "Add Connection") {
+                    await vscode.commands.executeCommand("pptb.connections.add");
+                }
+                return;
+            }
+
+            // Determine secondary connection requirement from the tool manifest
+            const tool = toolManager.getById(toolId);
+            let secondaryConnectionId: string | null = null;
+            let secondaryConnectionUrl: string | null = null;
+
+            if (tool) {
+                const multiConnection = ToolPanel.readToolMultiConnectionFeature(tool.toolPath);
+
+                if (multiConnection === "required" || multiConnection === "optional") {
+                    const selected = await ToolPanel.promptSecondaryConnection(
+                        managers.connectionsManager,
+                        activeConnection.id,
+                        multiConnection,
+                    );
+
+                    if (selected === undefined && multiConnection === "required") {
+                        // User cancelled — required secondary connection not provided
+                        return;
+                    }
+
+                    if (selected) {
+                        secondaryConnectionId = selected.id;
+                        secondaryConnectionUrl = selected.url;
+                    }
+                }
+            }
+
+            const title = tool ? `PPTB Tool — ${tool.name}` : "PPTB Tool";
+
+            // Build an explicit file: URI for localResourceRoots so that the webview
+            // service worker can match the resource path regardless of the scheme
+            // used by context.globalStorageUri (which may not be file: on all builds).
+            const toolPathUri = vscode.Uri.file(toolManager.getToolPath(toolId));
+
+            const panel = vscode.window.createWebviewPanel("pptb.toolPanel", title, column ?? vscode.ViewColumn.One, {
+                enableScripts: true,
+                localResourceRoots: [toolPathUri],
+                retainContextWhenHidden: true,
+            });
+
+            const initialContext: Partial<ToolContext> = { secondaryConnectionId, secondaryConnectionUrl };
+            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, toolId, toolManager, toolRegistryManager, managers, initialContext));
+            return;
+        }
+
+        // No connection manager present — launch directly
         const tool = toolManager.getById(toolId);
         const title = tool ? `PPTB Tool — ${tool.name}` : "PPTB Tool";
 
-        // Build an explicit file: URI for localResourceRoots so that the webview
-        // service worker can match the resource path regardless of the scheme
-        // used by context.globalStorageUri (which may not be file: on all builds).
         const toolPathUri = vscode.Uri.file(toolManager.getToolPath(toolId));
-
         const panel = vscode.window.createWebviewPanel("pptb.toolPanel", title, column ?? vscode.ViewColumn.One, {
             enableScripts: true,
             localResourceRoots: [toolPathUri],
@@ -159,6 +224,80 @@ export class ToolPanel {
         });
 
         ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, toolId, toolManager, toolRegistryManager, managers));
+    }
+
+    /**
+     * Read the `features.multiConnection` value from the tool's package.json.
+     * Returns "required", "optional", or undefined if not declared / unreadable.
+     */
+    private static readToolMultiConnectionFeature(toolPath: string): "required" | "optional" | undefined {
+        try {
+            const pkgPath = path.join(toolPath, "package.json");
+            if (!fs.existsSync(pkgPath)) {
+                return undefined;
+            }
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { features?: { multiConnection?: string } };
+            const value = pkg?.features?.multiConnection;
+            if (value === "required" || value === "optional") {
+                return value;
+            }
+        } catch {
+            // Ignore read/parse errors
+        }
+        return undefined;
+    }
+
+    /**
+     * Show a quick-pick for the user to select a secondary connection.
+     * - Returns the selected connection's id/url on success.
+     * - Returns null when the user skips (optional mode).
+     * - Returns undefined when the user dismisses the picker or no candidates exist (required mode).
+     */
+    private static async promptSecondaryConnection(
+        connectionsManager: ConnectionsManager,
+        primaryConnectionId: string,
+        mode: "required" | "optional",
+    ): Promise<{ id: string; url: string } | null | undefined> {
+        const candidates = connectionsManager.getAll().filter((c) => c.id !== primaryConnectionId);
+
+        if (candidates.length === 0) {
+            if (mode === "required") {
+                await vscode.window.showErrorMessage(
+                    "This tool requires a secondary connection but no other connections are configured. Please add another connection first.",
+                );
+                return undefined;
+            }
+            return null; // optional — no candidates, proceed without
+        }
+
+        type PickItem = vscode.QuickPickItem & { connectionId?: string; connectionUrl?: string };
+
+        const items: PickItem[] = candidates.map((c) => ({
+            label: c.name,
+            description: c.url,
+            detail: [c.environment, c.category].filter(Boolean).join(" · "),
+            connectionId: c.id,
+            connectionUrl: c.url,
+        }));
+
+        if (mode === "optional") {
+            items.push({ label: "$(close) Skip", description: "Launch without a secondary connection" });
+        }
+
+        const picked = await vscode.window.showQuickPick<PickItem>(items, {
+            title: mode === "required" ? "Select Secondary Connection (required)" : "Select Secondary Connection (optional)",
+            placeHolder: "Choose a secondary environment connection",
+        });
+
+        if (!picked) {
+            return undefined; // picker dismissed
+        }
+
+        if (!picked.connectionId) {
+            return null; // "Skip" chosen
+        }
+
+        return { id: picked.connectionId, url: picked.connectionUrl! };
     }
 
     dispose(toolId: string): void {

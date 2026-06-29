@@ -71,13 +71,15 @@ export class AuthManager implements vscode.Disposable {
 
     /**
      * Acquire an access token for the given connection.
+     * For interactive browser flow, attempts silent acquisition first to avoid
+     * opening the browser on every request.
      */
     async acquireToken(connection: Connection): Promise<string> {
         const scope = `${connection.url}/.default`;
 
         switch (connection.authType) {
             case AUTH_TYPES.INTERACTIVE_BROWSER:
-                return this.acquireTokenInteractive(connection, scope);
+                return this.acquireTokenSilentOrInteractive(connection, scope);
             case AUTH_TYPES.CLIENT_CREDENTIALS:
                 return this.acquireTokenClientCredentials(connection, scope);
             case AUTH_TYPES.USERNAME_PASSWORD:
@@ -89,28 +91,9 @@ export class AuthManager implements vscode.Disposable {
 
     /**
      * Refresh the access token for the given connection.
-     * For interactive flow, this attempts silent acquisition first.
+     * Delegates to acquireToken which already handles silent-first for interactive flows.
      */
     async refreshToken(connection: Connection): Promise<string> {
-        const scope = `${connection.url}/.default`;
-
-        if (connection.authType === AUTH_TYPES.INTERACTIVE_BROWSER) {
-            const pca = this.createPublicClient(connection);
-            const accounts = await pca.getTokenCache().getAllAccounts();
-            if (accounts.length > 0) {
-                const result = await pca.acquireTokenSilent({
-                    scopes: [scope],
-                    account: accounts[0],
-                });
-                if (result?.accessToken) {
-                    return result.accessToken;
-                }
-            }
-            // Fall back to interactive if silent fails
-            return this.acquireTokenInteractive(connection, scope);
-        }
-
-        // For other flows, re-acquire
         return this.acquireToken(connection);
     }
 
@@ -164,6 +147,29 @@ export class AuthManager implements vscode.Disposable {
             },
         };
         return new ConfidentialClientApplication(config);
+    }
+
+    /**
+     * Try silent token acquisition first; only open the interactive browser if
+     * no cached account exists or the silent attempt fails.
+     */
+    private async acquireTokenSilentOrInteractive(connection: Connection, scope: string): Promise<string> {
+        const pca = this.createPublicClient(connection);
+        const accounts = await pca.getTokenCache().getAllAccounts();
+        if (accounts.length > 0) {
+            const account = connection.msalAccountId
+                ? (accounts.find((a) => a.homeAccountId === connection.msalAccountId) ?? accounts[0])
+                : accounts[0];
+            try {
+                const result = await pca.acquireTokenSilent({ scopes: [scope], account });
+                if (result?.accessToken) {
+                    return result.accessToken;
+                }
+            } catch {
+                // Silent acquisition failed; fall through to interactive
+            }
+        }
+        return this.acquireTokenInteractive(connection, scope);
     }
 
     private async acquireTokenInteractive(connection: Connection, scope: string): Promise<string> {
