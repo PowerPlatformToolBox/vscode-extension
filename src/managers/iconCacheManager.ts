@@ -21,9 +21,11 @@ export class IconCacheManager implements vscode.Disposable {
     readonly onIconsCached: vscode.Event<void> = this._onIconsCached.event;
 
     readonly cacheDir: string;
+    readonly colorIconDir: string;
 
     constructor(context: vscode.ExtensionContext) {
         this.cacheDir = vscode.Uri.joinPath(context.globalStorageUri, "icon-cache").fsPath;
+        this.colorIconDir = vscode.Uri.joinPath(context.globalStorageUri, "color-icons").fsPath;
     }
 
     /**
@@ -97,6 +99,46 @@ export class IconCacheManager implements vscode.Disposable {
 
     dispose(): void {
         this._onIconsCached.dispose();
+    }
+
+    /**
+     * Returns a file URI for a colored filled-circle SVG (used for connection environment indicator).
+     * The SVG is generated on first access and reused on subsequent calls.
+     */
+    getColoredCircleUri(hexColor: string): vscode.Uri {
+        const safe = hexColor
+            .replace(/[^a-fA-F0-9]/g, "")
+            .toLowerCase()
+            .slice(0, 6);
+        const color = `#${safe}`;
+        const fileName = `env-circle-${safe}.svg`;
+        const localPath = path.join(this.colorIconDir, fileName);
+        if (!fs.existsSync(localPath)) {
+            ensureDir(this.colorIconDir);
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="${color}"/></svg>`;
+            fs.writeFileSync(localPath, svg, "utf8");
+        }
+        return vscode.Uri.file(localPath);
+    }
+
+    /**
+     * Returns a file URI for a colored rectangle SVG (used for category indicator).
+     * The SVG is generated on first access and reused on subsequent calls.
+     */
+    getColoredRectUri(hexColor: string): vscode.Uri {
+        const safe = hexColor
+            .replace(/[^a-fA-F0-9]/g, "")
+            .toLowerCase()
+            .slice(0, 6);
+        const color = `#${safe}`;
+        const fileName = `cat-rect-${safe}.svg`;
+        const localPath = path.join(this.colorIconDir, fileName);
+        if (!fs.existsSync(localPath)) {
+            ensureDir(this.colorIconDir);
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="1" y="4" width="14" height="8" rx="2" fill="${color}"/></svg>`;
+            fs.writeFileSync(localPath, svg, "utf8");
+        }
+        return vscode.Uri.file(localPath);
     }
 }
 

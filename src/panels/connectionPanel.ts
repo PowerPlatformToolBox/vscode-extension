@@ -13,7 +13,14 @@ export class ConnectionPanel {
     private readonly connectionsManager: ConnectionsManager;
     private disposables: vscode.Disposable[] = [];
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, connectionsManager: ConnectionsManager, connection?: Connection) {
+    private constructor(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        connectionsManager: ConnectionsManager,
+        connection: Connection | undefined,
+        categories: string[],
+        categoryColors: Record<string, string>,
+    ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.connectionsManager = connectionsManager;
@@ -23,7 +30,7 @@ export class ConnectionPanel {
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
         this.panel.webview.onDidReceiveMessage(
-            (message: { type: string; connection?: Connection }) => {
+            (message: { type: string; connection?: Connection; category?: string }) => {
                 this.handleMessage(message);
             },
             null,
@@ -36,6 +43,8 @@ export class ConnectionPanel {
             this.panel.webview.postMessage({
                 type: "pptb:init",
                 connection,
+                categories,
+                categoryColors,
             });
         }, 300);
     }
@@ -43,16 +52,26 @@ export class ConnectionPanel {
     /**
      * Open (or reveal) the connection panel.
      * Pass undefined for a new connection, or a Connection object to edit.
+     * Secrets are loaded from SecretStorage so the form is fully pre-populated.
      */
-    static open(extensionUri: vscode.Uri, connectionsManager: ConnectionsManager, connection?: Connection): void {
+    static async open(extensionUri: vscode.Uri, connectionsManager: ConnectionsManager, connection?: Connection): Promise<void> {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
+
+        // Load full connection with secrets for editing
+        let connectionWithSecrets = connection;
+        if (connection?.id) {
+            connectionWithSecrets = (await connectionsManager.getWithSecrets(connection.id)) ?? connection;
+        }
+        const categories = connectionsManager.getCategories();
+        const categoryColors = connectionsManager.getCategoryColors();
 
         if (ConnectionPanel.currentPanel) {
             ConnectionPanel.currentPanel.panel.reveal(column ?? vscode.ViewColumn.One);
-            // Update the connection data
             ConnectionPanel.currentPanel.panel.webview.postMessage({
                 type: "pptb:init",
-                connection,
+                connection: connectionWithSecrets,
+                categories,
+                categoryColors,
             });
             return;
         }
@@ -63,7 +82,7 @@ export class ConnectionPanel {
             retainContextWhenHidden: true,
         });
 
-        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, connectionsManager, connection);
+        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, connectionsManager, connectionWithSecrets, categories, categoryColors);
     }
 
     dispose(): void {
@@ -79,16 +98,16 @@ export class ConnectionPanel {
     // Message handling
     // ---------------------------------------------------------------------------
 
-    private handleMessage(message: { type: string; connection?: Connection }): void {
+    private handleMessage(message: { type: string; connection?: Connection; category?: string }): void {
         switch (message.type) {
             case "pptb:save":
                 if (message.connection) {
-                    this.handleSave(message.connection);
+                    void this.handleSave(message.connection);
                 }
                 break;
             case "pptb:test":
                 if (message.connection) {
-                    this.handleTest(message.connection);
+                    void this.handleTest(message.connection);
                 }
                 break;
             case "pptb:cancel":
@@ -99,6 +118,11 @@ export class ConnectionPanel {
 
     private async handleSave(connection: Connection): Promise<void> {
         try {
+            // Persist the category (and its color) so it is available for future connections
+            if (connection.category) {
+                await this.connectionsManager.saveCategory(connection.category, connection.categoryColor);
+            }
+
             const existing = this.connectionsManager.getById(connection.id);
             if (existing) {
                 await this.connectionsManager.update(connection);

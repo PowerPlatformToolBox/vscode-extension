@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
-import type { Connection } from "../managers/connectionsManager";
-import type { ConnectionsManager } from "../managers/connectionsManager";
+import { ENVIRONMENT_DEFAULT_COLORS } from "../constants";
+import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
+import type { IconCacheManager } from "../managers/iconCacheManager";
 
 /**
  * A tree item representing either a category group or an individual connection.
@@ -9,21 +10,44 @@ export class ConnectionTreeItem extends vscode.TreeItem {
     readonly connection?: Connection;
     readonly isCategory: boolean;
 
-    constructor(connection: Connection, isActive: boolean, collapsibleState: vscode.TreeItemCollapsibleState);
-    constructor(categoryLabel: string, isActive: false, collapsibleState: vscode.TreeItemCollapsibleState, isCategory: true);
-    constructor(connectionOrLabel: Connection | string, isActive: boolean, collapsibleState: vscode.TreeItemCollapsibleState, isCategory = false) {
-        if (isCategory) {
+    constructor(connection: Connection, isActive: boolean, collapsibleState: vscode.TreeItemCollapsibleState, iconCacheManager?: IconCacheManager);
+    constructor(categoryLabel: string, categoryColor: string | undefined, collapsibleState: vscode.TreeItemCollapsibleState, isCategory: true, iconCacheManager?: IconCacheManager);
+    constructor(
+        connectionOrLabel: Connection | string,
+        isActiveOrColor: boolean | string | undefined,
+        collapsibleState: vscode.TreeItemCollapsibleState,
+        isCategoryOrIconMgr: boolean | IconCacheManager = false,
+        iconCacheManager?: IconCacheManager,
+    ) {
+        if (isCategoryOrIconMgr === true) {
+            // Category item
             super(connectionOrLabel as string, collapsibleState);
             this.isCategory = true;
             this.contextValue = "pptb.category";
+            const categoryColor = isActiveOrColor as string | undefined;
+            const iconMgr = iconCacheManager;
+            if (categoryColor && iconMgr) {
+                this.iconPath = iconMgr.getColoredRectUri(categoryColor);
+            } else {
+                this.iconPath = new vscode.ThemeIcon("folder");
+            }
         } else {
+            // Connection item
             const conn = connectionOrLabel as Connection;
+            const isActive = isActiveOrColor as boolean;
+            const iconMgr = isCategoryOrIconMgr as IconCacheManager | undefined;
             super(conn.name, collapsibleState);
             this.connection = conn;
             this.isCategory = false;
             this.description = conn.environment;
             this.tooltip = conn.url;
-            this.iconPath = new vscode.ThemeIcon(isActive ? "circle-filled" : "circle-outline");
+            // Use environment color for the circle icon
+            const envColor = conn.environmentColor ?? ENVIRONMENT_DEFAULT_COLORS[conn.environment] ?? "#0078d4";
+            if (iconMgr) {
+                this.iconPath = iconMgr.getColoredCircleUri(envColor);
+            } else {
+                this.iconPath = new vscode.ThemeIcon(isActive ? "circle-filled" : "circle-outline");
+            }
             this.contextValue = isActive ? "pptb.connection.active" : "pptb.connection.inactive";
         }
     }
@@ -38,9 +62,11 @@ export class ConnectionsTreeDataProvider implements vscode.TreeDataProvider<Conn
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private readonly connectionsManager: ConnectionsManager;
+    private readonly iconCacheManager?: IconCacheManager;
 
-    constructor(connectionsManager: ConnectionsManager) {
+    constructor(connectionsManager: ConnectionsManager, iconCacheManager?: IconCacheManager) {
         this.connectionsManager = connectionsManager;
+        this.iconCacheManager = iconCacheManager;
 
         // Refresh tree whenever connections change
         connectionsManager.onConnectionsChanged.event(() => {
@@ -59,6 +85,7 @@ export class ConnectionsTreeDataProvider implements vscode.TreeDataProvider<Conn
     getChildren(element?: ConnectionTreeItem): ConnectionTreeItem[] {
         const connections = this.connectionsManager.getAll();
         const activeConnection = this.connectionsManager.getActiveConnection();
+        const categoryColors = this.connectionsManager.getCategoryColors();
 
         if (!element) {
             // Root level: check if any connection has a category
@@ -79,13 +106,14 @@ export class ConnectionsTreeDataProvider implements vscode.TreeDataProvider<Conn
 
                 const items: ConnectionTreeItem[] = [];
                 for (const category of categories) {
-                    items.push(new ConnectionTreeItem(category, false, vscode.TreeItemCollapsibleState.Expanded, true));
+                    const color = categoryColors[category];
+                    items.push(new ConnectionTreeItem(category, color, vscode.TreeItemCollapsibleState.Expanded, true, this.iconCacheManager));
                 }
 
                 // Add uncategorized connections at root
                 for (const conn of uncategorized) {
                     const isActive = activeConnection?.id === conn.id;
-                    items.push(new ConnectionTreeItem(conn, isActive, vscode.TreeItemCollapsibleState.None));
+                    items.push(new ConnectionTreeItem(conn, isActive, vscode.TreeItemCollapsibleState.None, this.iconCacheManager));
                 }
 
                 return items;
@@ -93,7 +121,7 @@ export class ConnectionsTreeDataProvider implements vscode.TreeDataProvider<Conn
                 // No categories — flat list
                 return connections.map((conn) => {
                     const isActive = activeConnection?.id === conn.id;
-                    return new ConnectionTreeItem(conn, isActive, vscode.TreeItemCollapsibleState.None);
+                    return new ConnectionTreeItem(conn, isActive, vscode.TreeItemCollapsibleState.None, this.iconCacheManager);
                 });
             }
         } else if (element.isCategory) {
@@ -103,7 +131,7 @@ export class ConnectionsTreeDataProvider implements vscode.TreeDataProvider<Conn
                 .filter((c) => c.category === categoryLabel)
                 .map((conn) => {
                     const isActive = activeConnection?.id === conn.id;
-                    return new ConnectionTreeItem(conn, isActive, vscode.TreeItemCollapsibleState.None);
+                    return new ConnectionTreeItem(conn, isActive, vscode.TreeItemCollapsibleState.None, this.iconCacheManager);
                 });
         }
 

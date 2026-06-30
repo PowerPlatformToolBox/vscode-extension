@@ -10,17 +10,17 @@ export function registerConnectionCommands(
     connectionsManager: ConnectionsManager,
     treeDataProvider: ConnectionsTreeDataProvider,
 ): vscode.Disposable[] {
-    const addCmd = vscode.commands.registerCommand("pptb.connections.add", () => {
-        ConnectionPanel.open(context.extensionUri, connectionsManager, undefined);
+    const addCmd = vscode.commands.registerCommand("pptb.connections.add", async () => {
+        await ConnectionPanel.open(context.extensionUri, connectionsManager, undefined);
     });
 
-    const editCmd = vscode.commands.registerCommand("pptb.connections.edit", (treeItem?: ConnectionTreeItem) => {
+    const editCmd = vscode.commands.registerCommand("pptb.connections.edit", async (treeItem?: ConnectionTreeItem) => {
         const connection = treeItem?.connection;
         if (!connection) {
             vscode.window.showWarningMessage("No connection selected to edit.");
             return;
         }
-        ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
+        await ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
     });
 
     const deleteCmd = vscode.commands.registerCommand("pptb.connections.delete", async (treeItem?: ConnectionTreeItem) => {
@@ -43,7 +43,9 @@ export function registerConnectionCommands(
             return;
         }
         try {
-            const token = await authManager.acquireToken(connection);
+            // Load secrets so ClientCredentials / UsernamePassword flows have their credentials
+            const connectionWithSecrets = (await connectionsManager.getWithSecrets(connection.id)) ?? connection;
+            const token = await authManager.acquireToken(connectionWithSecrets);
             await connectionsManager.update({
                 ...connection,
                 accessToken: token,
@@ -84,7 +86,9 @@ export function registerConnectionCommands(
             return;
         }
         try {
-            const ok = await connectionsManager.testConnection(connection);
+            // Load secrets so the auth flow has the required credentials
+            const connectionWithSecrets = (await connectionsManager.getWithSecrets(connection.id)) ?? connection;
+            const ok = await connectionsManager.testConnection(connectionWithSecrets);
             if (ok) {
                 vscode.window.showInformationMessage(`Connection "${connection.name}" is working.`);
             } else {
@@ -107,13 +111,13 @@ export function registerConnectionCommands(
         }
     });
 
-    const showDetailsCmd = vscode.commands.registerCommand("pptb.connections.showDetails", (treeItem?: ConnectionTreeItem) => {
+    const showDetailsCmd = vscode.commands.registerCommand("pptb.connections.showDetails", async (treeItem?: ConnectionTreeItem) => {
         const connection = treeItem?.connection;
         if (!connection) {
             vscode.window.showWarningMessage("No connection selected.");
             return;
         }
-        ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
+        await ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
     });
 
     const forgetCmd = vscode.commands.registerCommand("pptb.connections.forget", async (treeItem?: ConnectionTreeItem) => {

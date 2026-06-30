@@ -40,3 +40,17 @@ export const AUTH_TYPES = {
 } as const;
 
 export type AuthType = (typeof AUTH_TYPES)[keyof typeof AUTH_TYPES];
+
+/** GlobalState key for persisted user-defined connection categories */
+export const CATEGORIES_KEY = "pptb.categories";
+
+/** GlobalState key for persisted category colors (map of category name → hex color) */
+export const CATEGORY_COLORS_KEY = "pptb.categoryColors";
+
+/** Default environment indicator colors (used when no custom environmentColor is set) */
+export const ENVIRONMENT_DEFAULT_COLORS: Record<string, string> = {
+    Dev: "#2d883e",
+    Test: "#d9a84e",
+    UAT: "#d97706",
+    Production: "#dc2626",
+};

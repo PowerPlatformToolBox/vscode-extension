@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import * as vscode from "vscode";
-import { ACTIVE_CONNECTION_KEY, AUTH_TYPES, AuthType, CONNECTIONS_STATE_KEY, CONNECTION_SECRETS_KEY_PREFIX, CONNECTION_SECRETS_KEY_SUFFIX } from "../constants";
+import { ACTIVE_CONNECTION_KEY, AUTH_TYPES, AuthType, CATEGORIES_KEY, CATEGORY_COLORS_KEY, CONNECTIONS_STATE_KEY, CONNECTION_SECRETS_KEY_PREFIX, CONNECTION_SECRETS_KEY_SUFFIX } from "../constants";
 
 /**
  * Non-sensitive connection fields persisted in globalState.
@@ -426,6 +426,50 @@ export class ConnectionsManager {
         }
 
         return { imported, skipped, warnings };
+    }
+
+    // ---------------------------------------------------------------------------
+    // Categories
+    // ---------------------------------------------------------------------------
+
+    /** Return all user-defined categories (merged with any used in existing connections). */
+    getCategories(): string[] {
+        const stored = this.context.globalState.get<string[]>(CATEGORIES_KEY, []);
+        const fromConnections = this.getAll()
+            .map((c) => c.category)
+            .filter((c): c is string => typeof c === "string" && c.length > 0);
+        const merged = new Set([...stored, ...fromConnections]);
+        return [...merged].sort();
+    }
+
+    /** Persist a category name (and optionally its color). Idempotent. */
+    async saveCategory(name: string, color?: string): Promise<void> {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            return;
+        }
+        const categories = this.context.globalState.get<string[]>(CATEGORIES_KEY, []);
+        if (!categories.includes(trimmed)) {
+            categories.push(trimmed);
+            await this.context.globalState.update(CATEGORIES_KEY, categories);
+        }
+        if (color) {
+            const colors = this.context.globalState.get<Record<string, string>>(CATEGORY_COLORS_KEY, {});
+            colors[trimmed] = color;
+            await this.context.globalState.update(CATEGORY_COLORS_KEY, colors);
+        }
+    }
+
+    /** Return the stored category color map, enriched with colors inferred from existing connections. */
+    getCategoryColors(): Record<string, string> {
+        const stored = this.context.globalState.get<Record<string, string>>(CATEGORY_COLORS_KEY, {});
+        const result: Record<string, string> = { ...stored };
+        for (const conn of this.getAll()) {
+            if (conn.category && conn.categoryColor && !result[conn.category]) {
+                result[conn.category] = conn.categoryColor;
+            }
+        }
+        return result;
     }
 
     // ---------------------------------------------------------------------------

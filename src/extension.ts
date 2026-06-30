@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const iconCacheManager = new IconCacheManager(context);
 
     // ── Tree views ────────────────────────────────────────────────────────────
-    const treeDataProvider = new ConnectionsTreeDataProvider(connectionsManager);
+    const treeDataProvider = new ConnectionsTreeDataProvider(connectionsManager, iconCacheManager);
     const treeView = vscode.window.createTreeView("pptb.connectionsView", {
         treeDataProvider,
         showCollapseAll: true,
