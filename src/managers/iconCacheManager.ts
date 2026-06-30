@@ -29,15 +29,30 @@ export class IconCacheManager implements vscode.Disposable {
     }
 
     /**
-     * Returns the local file URI for a cached icon, or `undefined` if the icon
+     * Returns the local file URI(s) for a cached icon, or `undefined` if the icon
      * has not been downloaded yet.
+     *
+     * For SVG icons two theme-aware variants are stored:
+     *   - `cacheDir/light/<file>` — currentColor replaced with #000000 (light themes)
+     *   - `cacheDir/dark/<file>`  — currentColor replaced with #ffffff (dark themes)
+     * VS Code will automatically pick the correct variant via `{ light, dark }` iconPath.
+     *
+     * Non-SVG icons are returned as a plain Uri (original behaviour).
      */
-    getLocalUri(iconUrl: string | undefined): vscode.Uri | undefined {
+    getLocalUri(iconUrl: string | undefined): vscode.Uri | { light: vscode.Uri; dark: vscode.Uri } | undefined {
         if (!iconUrl) {
             return undefined;
         }
         const fileName = fileNameFromUrl(iconUrl);
         if (!fileName) {
+            return undefined;
+        }
+        if (fileName.toLowerCase().endsWith(".svg")) {
+            const lightPath = path.join(this.cacheDir, "light", fileName);
+            const darkPath = path.join(this.cacheDir, "dark", fileName);
+            if (fs.existsSync(lightPath) && fs.existsSync(darkPath)) {
+                return { light: vscode.Uri.file(lightPath), dark: vscode.Uri.file(darkPath) };
+            }
             return undefined;
         }
         const localPath = path.join(this.cacheDir, fileName);
@@ -57,36 +72,66 @@ export class IconCacheManager implements vscode.Disposable {
     async warmUp(iconUrls: string[]): Promise<void> {
         ensureDir(this.cacheDir);
 
+        const lightDir = path.join(this.cacheDir, "light");
+        const darkDir = path.join(this.cacheDir, "dark");
+
         const expectedNames = new Set(iconUrls.map(fileNameFromUrl).filter((n): n is string => !!n));
 
         // ── Prune orphaned icons ─────────────────────────────────────────────
-        try {
-            for (const file of fs.readdirSync(this.cacheDir)) {
-                if (!expectedNames.has(file)) {
-                    try {
-                        fs.unlinkSync(path.join(this.cacheDir, file));
-                    } catch {
-                        // ignore — file may have been removed already
+        for (const subDir of [this.cacheDir, lightDir, darkDir]) {
+            try {
+                for (const file of fs.readdirSync(subDir)) {
+                    // Skip sub-directories when scanning cacheDir root
+                    if (subDir === this.cacheDir && (file === "light" || file === "dark")) {
+                        continue;
+                    }
+                    if (!expectedNames.has(file)) {
+                        try {
+                            fs.unlinkSync(path.join(subDir, file));
+                        } catch {
+                            // ignore — file may have been removed already
+                        }
                     }
                 }
+            } catch {
+                // ignore — dir may not exist yet
             }
-        } catch {
-            // ignore — dir may not exist yet
         }
 
         // ── Download missing icons ───────────────────────────────────────────
         const toDownload = iconUrls.filter((url) => {
             const fn = fileNameFromUrl(url);
-            return fn && !fs.existsSync(path.join(this.cacheDir, fn));
+            if (!fn) {
+                return false;
+            }
+            if (fn.toLowerCase().endsWith(".svg")) {
+                // Need both light and dark variants
+                return !fs.existsSync(path.join(lightDir, fn)) || !fs.existsSync(path.join(darkDir, fn));
+            }
+            return !fs.existsSync(path.join(this.cacheDir, fn));
         });
 
         for (let i = 0; i < toDownload.length; i += DOWNLOAD_CONCURRENCY) {
             await Promise.all(
                 toDownload.slice(i, i + DOWNLOAD_CONCURRENCY).map(async (url) => {
                     const fn = fileNameFromUrl(url)!;
-                    const dest = path.join(this.cacheDir, fn);
                     try {
-                        await download(url, dest);
+                        if (fn.toLowerCase().endsWith(".svg")) {
+                            // Download to a temporary path, then produce themed variants
+                            const tmpPath = path.join(this.cacheDir, fn + ".tmp");
+                            await download(url, tmpPath);
+                            const content = fs.readFileSync(tmpPath, "utf8");
+                            fs.unlinkSync(tmpPath);
+                            ensureDir(lightDir);
+                            ensureDir(darkDir);
+                            // Light theme: replace currentColor with black
+                            fs.writeFileSync(path.join(lightDir, fn), content.replace(/currentColor/gi, "#000000"), "utf8");
+                            // Dark theme: replace currentColor with white
+                            fs.writeFileSync(path.join(darkDir, fn), content.replace(/currentColor/gi, "#ffffff"), "utf8");
+                        } else {
+                            const dest = path.join(this.cacheDir, fn);
+                            await download(url, dest);
+                        }
                     } catch (err) {
                         logger.error(`[IconCache] Failed to download ${url}: ${err instanceof Error ? err.message : String(err)}`);
                     }
