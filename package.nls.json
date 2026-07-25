@@ -25,5 +25,9 @@
     "command.marketplace.refresh.title": "Refresh Marketplace",
     "command.marketplace.install.title": "Install Tool",
     "command.marketplace.uninstall.title": "Uninstall Tool",
-    "command.marketplace.browse.title": "Browse Marketplace"
+    "command.marketplace.browse.title": "Browse Marketplace",
+    "command.help.reportBug.title": "Report a Bug",
+    "command.help.requestFeature.title": "Request a Feature",
+    "command.help.openIssues.title": "Open Issue Tracker",
+    "command.help.joinDiscord.title": "Join PPTB Discord"
 }

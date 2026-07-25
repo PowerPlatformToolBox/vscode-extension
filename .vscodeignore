@@ -15,6 +15,5 @@ webpack.config.js
 tsconfig.json
 CONTRIBUTING.md
 CODE_OF_CONDUCT.md
-**/*.map
 **/*.ts
-!dist/**
+**/*.map

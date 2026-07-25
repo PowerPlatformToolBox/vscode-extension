@@ -55,7 +55,10 @@ export function registerConnectionCommands(
             vscode.window.showInformationMessage(`Connected to "${connection.name}".`);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Failed to connect: ${msg}`);
+            const action = await vscode.window.showErrorMessage(`Failed to connect: ${msg}`, "Report Bug");
+            if (action === "Report Bug") {
+                await vscode.commands.executeCommand("pptb.help.reportBug");
+            }
         }
     });
 
@@ -96,7 +99,10 @@ export function registerConnectionCommands(
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Connection test error: ${msg}`);
+            const action = await vscode.window.showErrorMessage(`Connection test error: ${msg}`, "Report Bug");
+            if (action === "Report Bug") {
+                await vscode.commands.executeCommand("pptb.help.reportBug");
+            }
         }
     });
 
@@ -181,7 +187,10 @@ export function registerConnectionCommands(
             }
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Import failed: ${message}`);
+            const action = await vscode.window.showErrorMessage(`Import failed: ${message}`, "Report Bug");
+            if (action === "Report Bug") {
+                await vscode.commands.executeCommand("pptb.help.reportBug");
+            }
         }
     });
 

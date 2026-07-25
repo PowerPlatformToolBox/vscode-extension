@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img"
+    aria-label="Feedback commands placeholder">
+    <rect width="1280" height="720" fill="#0f172a" />
+    <rect x="56" y="56" width="1168" height="608" rx="16" fill="#1e293b" stroke="#334155" />
+    <text x="96" y="130" fill="#e2e8f0" font-family="Arial, sans-serif" font-size="36">PPTB Feedback Commands</text>
+    <text x="96" y="182" fill="#94a3b8" font-family="Arial, sans-serif" font-size="24">Replace this placeholder with a
+        real screenshot before release.</text>
+</svg>

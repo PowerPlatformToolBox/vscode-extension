@@ -1,0 +1,77 @@
+name: Bug Report
+description: File a bug report for the VS Code extension.
+title: "[Bug]: "
+labels: ["triage"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to fill out this bug report.
+
+              If you need real-time help, join the PPTB team on Discord:
+              https://discord.gg/efwAu9sXyJ
+
+    - type: input
+      id: extension-version
+      attributes:
+          label: Extension version
+          description: Find this in the Extensions view under Power Platform ToolBox.
+          placeholder: 0.1.0
+      validations:
+          required: true
+
+    - type: input
+      id: vscode-version
+      attributes:
+          label: VS Code version
+          placeholder: 1.102.0
+      validations:
+          required: true
+
+    - type: dropdown
+      id: os
+      attributes:
+          label: Operating system
+          options:
+              - Windows
+              - macOS
+              - Linux
+              - Other
+      validations:
+          required: true
+
+    - type: textarea
+      id: steps
+      attributes:
+          label: Steps to reproduce
+          description: Share clear steps so we can reproduce the issue.
+          placeholder: |
+              1. Open the PPTB view
+              2. Add a connection
+              3. Click Connect
+              4. Error appears
+      validations:
+          required: true
+
+    - type: textarea
+      id: expected
+      attributes:
+          label: Expected behavior
+          placeholder: It should connect successfully.
+      validations:
+          required: true
+
+    - type: textarea
+      id: actual
+      attributes:
+          label: Actual behavior
+          placeholder: It fails with an authentication error.
+      validations:
+          required: true
+
+    - type: textarea
+      id: logs
+      attributes:
+          label: Relevant logs or error text
+          description: Paste stack traces, notifications, and output channel logs if available.
+          render: shell

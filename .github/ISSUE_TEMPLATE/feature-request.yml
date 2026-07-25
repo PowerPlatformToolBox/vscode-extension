@@ -1,0 +1,43 @@
+name: Feature Request
+description: Suggest an idea for the VS Code extension.
+title: "[Feature]: "
+labels: ["triage"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for sharing an idea.
+
+              For community discussion and quick feedback, join the PPTB team on Discord:
+              https://discord.gg/efwAu9sXyJ
+
+    - type: textarea
+      id: problem
+      attributes:
+          label: Problem statement
+          description: What problem are you trying to solve?
+          placeholder: I want to...
+      validations:
+          required: true
+
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposed solution
+          description: Describe your ideal solution in as much detail as possible.
+          placeholder: I would like the extension to...
+      validations:
+          required: true
+
+    - type: textarea
+      id: alternatives
+      attributes:
+          label: Alternatives considered
+          description: Optional - what workarounds or alternatives have you tried?
+          placeholder: Today I work around this by...
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context
+          description: Optional - mockups, screenshots, or links.

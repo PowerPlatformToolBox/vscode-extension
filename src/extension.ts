@@ -9,6 +9,7 @@ import { ConnectionsTreeDataProvider } from "./providers/connectionsTreeDataProv
 import { InstalledToolsTreeDataProvider } from "./providers/installedToolsTreeDataProvider";
 import { MarketplaceTreeDataProvider } from "./providers/marketplaceTreeDataProvider";
 import { registerConnectionCommands } from "./registrations/registerConnectionCommands";
+import { registerSupportCommands } from "./registrations/registerSupportCommands";
 import { registerToolCommands } from "./registrations/registerToolCommands";
 import { ConnectionStatusBar } from "./statusbar/connectionStatusBar";
 import { logger } from "./utils/logger";
@@ -62,6 +63,7 @@ export function activate(context: vscode.ExtensionContext): void {
         iconCacheManager,
         statusBar,
         ...registerConnectionCommands(context, authManager, connectionsManager, treeDataProvider),
+        ...registerSupportCommands(),
         ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider),
     );
 

@@ -77,7 +77,10 @@ export function registerToolCommands(
             vscode.window.showInformationMessage(`"${item.registryTool.name}" installed successfully.`);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Install failed: ${msg}`);
+            const action = await vscode.window.showErrorMessage(`Install failed: ${msg}`, "Report Bug");
+            if (action === "Report Bug") {
+                await vscode.commands.executeCommand("pptb.help.reportBug");
+            }
         }
     });
 

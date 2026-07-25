@@ -4,6 +4,7 @@
   "description": "%extension.description%",
   "version": "0.1.0",
   "publisher": "PowerPlatformToolBox",
+  "preview": true,
   "license": "GPL-3.0",
   "icon": "resources/icon.png",
   "galleryBanner": {
@@ -177,6 +178,30 @@
         "title": "%command.marketplace.browse.title%",
         "category": "%command.category%",
         "icon": "$(list-flat)"
+      },
+      {
+        "command": "pptb.help.reportBug",
+        "title": "%command.help.reportBug.title%",
+        "category": "%command.category%",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "pptb.help.requestFeature",
+        "title": "%command.help.requestFeature.title%",
+        "category": "%command.category%",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "pptb.help.openIssues",
+        "title": "%command.help.openIssues.title%",
+        "category": "%command.category%",
+        "icon": "$(issues)"
+      },
+      {
+        "command": "pptb.help.joinDiscord",
+        "title": "%command.help.joinDiscord.title%",
+        "category": "%command.category%",
+        "icon": "$(comment-discussion)"
       }
     ],
     "menus": {
@@ -226,6 +251,41 @@
           "command": "pptb.marketplace.refresh",
           "when": "view == pptb.marketplaceView",
           "group": "navigation"
+        },
+        {
+          "command": "pptb.help.reportBug",
+          "when": "view == pptb.connectionsView",
+          "group": "3_help@1"
+        },
+        {
+          "command": "pptb.help.requestFeature",
+          "when": "view == pptb.connectionsView",
+          "group": "3_help@2"
+        },
+        {
+          "command": "pptb.help.reportBug",
+          "when": "view == pptb.installedToolsView",
+          "group": "3_help@1"
+        },
+        {
+          "command": "pptb.help.requestFeature",
+          "when": "view == pptb.installedToolsView",
+          "group": "3_help@2"
+        },
+        {
+          "command": "pptb.help.reportBug",
+          "when": "view == pptb.marketplaceView",
+          "group": "3_help@1"
+        },
+        {
+          "command": "pptb.help.requestFeature",
+          "when": "view == pptb.marketplaceView",
+          "group": "3_help@2"
+        },
+        {
+          "command": "pptb.help.joinDiscord",
+          "when": "view == pptb.marketplaceView",
+          "group": "3_help@3"
         }
       ],
       "view/item/context": [
@@ -311,7 +371,9 @@
     "vscode:prepublish": "npm run package",
     "compile": "webpack",
     "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
+    "package": "webpack --mode production --devtool false",
+    "publish:preview": "npx @vscode/vsce publish --pre-release",
+    "publish": "npx @vscode/vsce publish",
     "compile-tests": "tsc -p . --outDir out",
     "pretest": "npm run compile-tests",
     "lint": "eslint src --ext .ts,.tsx",
