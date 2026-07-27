@@ -1,5 +1,5 @@
 {
-    "extension.displayName": "Power Platform ToolBox",
+    "extension.displayName": "Power Platform ToolBox\u200B",
     "extension.description": "Manage Power Platform connections and developer tools directly from VS Code.",
     "viewsContainer.pptbExplorer.title": "Power Platform ToolBox",
     "view.connectionsView.name": "Connections",
