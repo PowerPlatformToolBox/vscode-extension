@@ -49,15 +49,18 @@
       "pptb-explorer": [
         {
           "id": "pptb.connectionsView",
-          "name": "%view.connectionsView.name%"
+          "name": "%view.connectionsView.name%",
+          "icon": "./resources/icon.svg"
         },
         {
           "id": "pptb.installedToolsView",
-          "name": "%view.installedToolsView.name%"
+          "name": "%view.installedToolsView.name%",
+          "icon": "./resources/icon.svg"
         },
         {
           "id": "pptb.marketplaceView",
-          "name": "%view.marketplaceView.name%"
+          "name": "%view.marketplaceView.name%",
+          "icon": "./resources/icon.svg"
         }
       ]
     },
