@@ -111,7 +111,7 @@ export class ConnectionsManager {
 
     /** Return all connections (public fields only — secrets excluded). */
     getAll(): Connection[] {
-        return this.context.globalState.get<ConnectionPublicFields[]>(CONNECTIONS_STATE_KEY, []);
+        return this.context.globalState.get<ConnectionPublicFields[]>(CONNECTIONS_STATE_KEY, []).sort((a, b) => a.name.localeCompare(b.name));
     }
 
     /** Return a single connection by ID (public fields only). */

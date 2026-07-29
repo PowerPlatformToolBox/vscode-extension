@@ -139,7 +139,7 @@ export class ToolRegistryManager {
         }
 
         return {
-            tools: (data ?? []).map(mapRow),
+            tools: (data ?? []).map(mapRow).sort((a, b) => a.name.localeCompare(b.name)),
             total: count ?? 0,
         };
     }
