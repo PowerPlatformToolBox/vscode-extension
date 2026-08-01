@@ -95,7 +95,7 @@ export class ToolManager implements vscode.Disposable {
 
     /** Return every installed tool recorded in the manifest. */
     getAll(): InstalledTool[] {
-        return this.readManifest();
+        return this.readManifest().sort((a, b) => a.name.localeCompare(b.name));
     }
 
     /** Return a single installed tool by its ID, or `undefined` if not found. */
