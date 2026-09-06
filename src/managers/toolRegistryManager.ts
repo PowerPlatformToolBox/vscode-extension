@@ -17,6 +17,10 @@ export interface RegistryTool {
     description?: string;
     /** Publisher / author of the tool. */
     publisher?: string;
+    /** Contributors to the tool. Can be a string or array of strings. */
+    contributors?: string[] | string;
+    /** Whether the tool is verified. */
+    isVerified?: boolean;
     /** URL from which the tool binary/archive can be downloaded. */
     download?: string;
     /** URL of the tool's icon image. */
@@ -136,10 +140,21 @@ export class ToolRegistryManager {
         this.output.appendLine(`[Registry] getTools returned ${count ?? 0} total rows, ${(data ?? []).length} in page`);
         if ((data ?? []).length > 0) {
             this.output.appendLine(`[Registry] First row keys: ${Object.keys((data as Record<string, unknown>[])[0]).join(", ")}`);
+            this.output.appendLine(`[Registry] First row raw: ${JSON.stringify((data as Record<string, unknown>[])[0])}`);
         }
 
+        const tools = (data ?? []).map(mapRow);
+        const maturityMap = await this.getMaturityMap(tools.map((t) => t.id));
+        for (const tool of tools) {
+            if (maturityMap.has(tool.id)) {
+                tool.isVerified = maturityMap.get(tool.id) ?? false;
+            }
+        }
+
+        this.output.appendLine(`[Registry] Mapped tools: ${tools.map((t) => `${t.id} (contributors=${JSON.stringify(t.contributors) ?? "none"}, verified=${t.isVerified})`).join("; ")}`);
+
         return {
-            tools: (data ?? []).map(mapRow).sort((a, b) => a.name.localeCompare(b.name)),
+            tools,
             total: count ?? 0,
         };
     }
@@ -159,7 +174,51 @@ export class ToolRegistryManager {
             return null;
         }
 
-        return mapRow(data as Record<string, unknown>);
+        const tool = mapRow(data as Record<string, unknown>);
+        const maturityMap = await this.getMaturityMap([tool.id]);
+        if (maturityMap.has(tool.id)) {
+            tool.isVerified = maturityMap.get(tool.id) ?? false;
+        }
+        return tool;
+    }
+
+    /**
+     * Query the `tool_maturity` table for the given tool IDs and return a map
+     * of tool ID → verified status. A tool with no row in `tool_maturity` is
+     * considered *not verified*. A missing/unqueryable table is treated as
+     * "unknown" (empty map) so callers fall back to any other verification
+     * signal already present on the tool row.
+     */
+    private async getMaturityMap(toolIds: string[]): Promise<Map<string, boolean>> {
+        const map = new Map<string, boolean>();
+        if (!this.client || toolIds.length === 0) {
+            return map;
+        }
+
+        const { data, error } = await this.client.from("tool_maturity").select("tool_id, status").in("tool_id", toolIds);
+
+        if (error) {
+            this.output.appendLine(`[Registry] tool_maturity lookup error: ${error.message}`);
+            return map;
+        }
+
+        for (const row of (data ?? []) as Record<string, unknown>[]) {
+            const toolId = str(row["tool_id"]);
+            if (!toolId) {
+                continue;
+            }
+            const status = str(row["status"])?.toLowerCase();
+            map.set(toolId, status === "verified");
+        }
+
+        // Any requested tool without a tool_maturity row is explicitly not verified.
+        for (const id of toolIds) {
+            if (!map.has(id)) {
+                map.set(id, false);
+            }
+        }
+
+        return map;
     }
 
     /**
@@ -225,17 +284,139 @@ export class ToolRegistryManager {
 // Row mapping — handles both camelCase and snake_case column names
 // ---------------------------------------------------------------------------
 
-function str(v: unknown): string | undefined {
-    return typeof v === "string" && v.length > 0 ? v : undefined;
+export function str(v: unknown): string | undefined {
+    return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
+}
+
+export function bool(v: unknown): boolean | undefined {
+    if (typeof v === "boolean") {
+        return v;
+    }
+    if (typeof v === "string") {
+        const lower = v.trim().toLowerCase();
+        if (lower === "true" || lower === "1" || lower === "yes" || lower === "verified" || lower === "official") {
+            return true;
+        }
+        if (lower === "false" || lower === "0" || lower === "no" || lower === "unverified" || lower === "community") {
+            return false;
+        }
+    }
+    if (typeof v === "number") {
+        return v === 1;
+    }
+    return undefined;
+}
+
+export function extractNames(v: unknown): string[] | string | undefined {
+    if (v === null || v === undefined) {
+        return undefined;
+    }
+    if (typeof v === "string") {
+        const trimmed = v.trim();
+        if (!trimmed) {
+            return undefined;
+        }
+        if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                return extractNames(parsed);
+            } catch {
+                return trimmed;
+            }
+        }
+        return trimmed;
+    }
+    if (Array.isArray(v)) {
+        const names: string[] = [];
+        for (const item of v) {
+            if (typeof item === "string" && item.trim().length > 0) {
+                names.push(item.trim());
+            } else if (item && typeof item === "object") {
+                const obj = item as Record<string, unknown>;
+                const name = str(obj["name"]) ?? str(obj["username"]) ?? str(obj["login"]) ?? str(obj["displayName"]) ?? str(obj["title"]);
+                if (name) {
+                    names.push(name);
+                }
+            }
+        }
+        return names.length > 0 ? names : undefined;
+    }
+    if (typeof v === "object") {
+        const obj = v as Record<string, unknown>;
+        const name = str(obj["name"]) ?? str(obj["username"]) ?? str(obj["login"]) ?? str(obj["displayName"]) ?? str(obj["title"]);
+        return name ?? undefined;
+    }
+    return undefined;
+}
+
+export function parseContributorsFromRecord(row: Record<string, unknown>): string[] | string | undefined {
+    const keys = ["contributors", "contributor", "authors", "author", "publisher", "maintainers", "maintainer", "developer", "developers", "owner", "created_by", "org", "organization"];
+
+    for (const key of keys) {
+        const val = row[key];
+        if (val !== null && val !== undefined) {
+            const parsed = extractNames(val);
+            if (parsed) {
+                return parsed;
+            }
+        }
+    }
+
+    // Fall back to scanning one level of nested JSON blobs (e.g. a
+    // "package_json" / "manifest" / "metadata" column holding the tool's
+    // full package.json) for the same set of contributor-like keys.
+    for (const value of Object.values(row)) {
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            const nested = value as Record<string, unknown>;
+            for (const key of keys) {
+                const val = nested[key];
+                if (val !== null && val !== undefined) {
+                    const parsed = extractNames(val);
+                    if (parsed) {
+                        return parsed;
+                    }
+                }
+            }
+        }
+    }
+
+    return undefined;
+}
+
+export function parseVerifiedFromRecord(row: Record<string, unknown>): boolean {
+    const candidates = [row["isVerified"], row["is_verified"], row["verified"], row["is_official"], row["official"], row["verified_tool"], row["is_verified_tool"], row["badge"]];
+    for (const val of candidates) {
+        const b = bool(val);
+        if (b !== undefined) {
+            return b;
+        }
+    }
+    return false;
+}
+
+export function formatContributors(contributors?: string[] | string): string | undefined {
+    if (!contributors) {
+        return undefined;
+    }
+    if (Array.isArray(contributors)) {
+        return contributors.join(", ");
+    }
+    return contributors;
 }
 
 function mapRow(row: Record<string, unknown>): RegistryTool {
+    const contributors = parseContributorsFromRecord(row);
+    const publisher = str(row["publisher"]) ?? str(row["author"]) ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
+    const isVerified = parseVerifiedFromRecord(row);
+
     return {
         id: str(row["id"]) ?? "",
         name: str(row["name"]) ?? "",
         version: str(row["version"]) ?? "0.0.0",
         description: str(row["description"]),
-        publisher: str(row["publisher"]),
+        publisher,
+        contributors,
+        isVerified,
         download: str(row["download"]),
         icon: str(row["icon"]),
         executableRelativePath: str(row["executableRelativePath"]) ?? str(row["executable_relative_path"]),

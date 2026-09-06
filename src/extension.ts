@@ -64,7 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar,
         ...registerConnectionCommands(context, authManager, connectionsManager, treeDataProvider),
         ...registerSupportCommands(),
-        ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider),
+        ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider, iconCacheManager),
     );
 
     // ── Warm up icon cache in background ─────────────────────────────────────

@@ -47,6 +47,9 @@ export const CATEGORIES_KEY = "pptb.categories";
 /** GlobalState key for persisted category colors (map of category name → hex color) */
 export const CATEGORY_COLORS_KEY = "pptb.categoryColors";
 
+/** GlobalState key prefix for persisted per-tool settings (suffixed with the tool id) */
+export const TOOL_SETTINGS_KEY_PREFIX = "pptb.toolSettings.";
+
 /** Default environment indicator colors (used when no custom environmentColor is set) */
 export const ENVIRONMENT_DEFAULT_COLORS: Record<string, string> = {
     Dev: "#2d883e",

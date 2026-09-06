@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ConnectionsManager } from "../managers/connectionsManager";
 import type { DataverseManager } from "../managers/dataverseManager";
+import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
@@ -25,16 +26,30 @@ export class ToolHostPanel {
 
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
+    private readonly context: vscode.ExtensionContext;
     private readonly toolManager: ToolManager;
     private readonly toolRegistryManager: ToolRegistryManager;
+    private readonly iconCacheManager: IconCacheManager;
     private readonly managers?: OpenManagers;
     private disposables: vscode.Disposable[] = [];
+    private lastMarketplaceSearch: string | undefined;
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, toolRegistryManager: ToolRegistryManager, toolManager: ToolManager, initialView: ToolHostView, managers?: OpenManagers) {
+    private constructor(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        context: vscode.ExtensionContext,
+        toolRegistryManager: ToolRegistryManager,
+        toolManager: ToolManager,
+        iconCacheManager: IconCacheManager,
+        initialView: ToolHostView,
+        managers?: OpenManagers,
+    ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
+        this.context = context;
         this.toolManager = toolManager;
         this.toolRegistryManager = toolRegistryManager;
+        this.iconCacheManager = iconCacheManager;
         this.managers = managers;
 
         this.panel.webview.html = this.getHtmlForWebview(this.panel.webview, initialView);
@@ -51,12 +66,23 @@ export class ToolHostPanel {
             null,
             this.disposables,
         );
+
+        // Re-push tool lists once newly downloaded icons are theme-aware and ready on disk.
+        this.disposables.push(this.iconCacheManager.onIconsCached(() => this.refreshIcons()));
     }
 
     /**
      * Open (or reveal) the tool list panel, switching to the requested view.
      */
-    static open(extensionUri: vscode.Uri, toolRegistryManager: ToolRegistryManager, toolManager: ToolManager, initialView: ToolHostView = "installed", managers?: OpenManagers): void {
+    static open(
+        extensionUri: vscode.Uri,
+        context: vscode.ExtensionContext,
+        toolRegistryManager: ToolRegistryManager,
+        toolManager: ToolManager,
+        iconCacheManager: IconCacheManager,
+        initialView: ToolHostView = "installed",
+        managers?: OpenManagers,
+    ): void {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
 
         if (ToolHostPanel.currentPanel) {
@@ -68,11 +94,11 @@ export class ToolHostPanel {
 
         const panel = vscode.window.createWebviewPanel("pptb.toolHostPanel", "PPTB Tool List", column ?? vscode.ViewColumn.One, {
             enableScripts: true,
-            localResourceRoots: [vscode.Uri.joinPath(extensionUri, "dist", "webviews")],
+            localResourceRoots: [vscode.Uri.joinPath(extensionUri, "dist", "webviews"), vscode.Uri.file(iconCacheManager.cacheDir)],
             retainContextWhenHidden: true,
         });
 
-        ToolHostPanel.currentPanel = new ToolHostPanel(panel, extensionUri, toolRegistryManager, toolManager, initialView, managers);
+        ToolHostPanel.currentPanel = new ToolHostPanel(panel, extensionUri, context, toolRegistryManager, toolManager, iconCacheManager, initialView, managers);
     }
 
     dispose(): void {
@@ -87,37 +113,18 @@ export class ToolHostPanel {
     private async handleMessage(message: { type: string; toolId?: string; search?: string; page?: number }): Promise<void> {
         switch (message.type) {
             case "get-installed-tools": {
-                const installedTools = this.toolManager.getAll();
-                this.panel.webview.postMessage({
-                    type: "installed-tools",
-                    tools: installedTools,
-                });
+                this.postInstalledTools();
                 break;
             }
             case "get-marketplace-tools": {
-                try {
-                    const result = await this.toolRegistryManager.getTools({
-                        search: message.search,
-                        page: message.page ?? 1,
-                    });
-                    const installedIds = new Set(this.toolManager.getAll().map((t) => t.id));
-                    this.panel.webview.postMessage({
-                        type: "marketplace-tools",
-                        tools: result.tools,
-                        total: result.total,
-                        installedIds: [...installedIds],
-                    });
-                } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    logger.error("ToolHostPanel get-marketplace-tools error:", msg);
-                    this.panel.webview.postMessage({ type: "marketplace-error", message: msg });
-                }
+                this.lastMarketplaceSearch = message.search ?? "";
+                await this.postMarketplaceTools(message.search, message.page ?? 1);
                 break;
             }
             case "launch-tool": {
                 const toolId = message.toolId;
                 if (toolId) {
-                    ToolPanel.open(this.extensionUri, toolId, this.toolManager, this.toolRegistryManager, this.managers);
+                    ToolPanel.open(this.extensionUri, this.context, toolId, this.toolManager, this.toolRegistryManager, this.managers);
                 }
                 break;
             }
@@ -163,6 +170,61 @@ export class ToolHostPanel {
                 logger.warn("ToolHostPanel: unrecognised message type:", message.type);
                 break;
         }
+    }
+
+    private postInstalledTools(): void {
+        const installedTools = this.toolManager.getAll();
+        this.panel.webview.postMessage({
+            type: "installed-tools",
+            tools: installedTools.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
+        });
+    }
+
+    private async postMarketplaceTools(search: string | undefined, page: number): Promise<void> {
+        try {
+            const result = await this.toolRegistryManager.getTools({ search, page });
+            const installedIds = new Set(this.toolManager.getAll().map((t) => t.id));
+            this.panel.webview.postMessage({
+                type: "marketplace-tools",
+                tools: result.tools.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
+                total: result.total,
+                installedIds: [...installedIds],
+            });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger.error("ToolHostPanel get-marketplace-tools error:", msg);
+            this.panel.webview.postMessage({ type: "marketplace-error", message: msg });
+        }
+    }
+
+    /**
+     * Re-sends the currently visible tool lists once the icon cache finishes downloading/theming
+     * icons, so the webview swaps in theme-aware icons the same way the tree views do.
+     */
+    private refreshIcons(): void {
+        this.postInstalledTools();
+        if (this.lastMarketplaceSearch !== undefined) {
+            void this.postMarketplaceTools(this.lastMarketplaceSearch || undefined, 1);
+        }
+    }
+
+    /**
+     * Resolves a tool's raw icon URL to theme-aware webview URIs backed by the local icon cache,
+     * mirroring `IconCacheManager.getLocalUri` usage in the tree data providers. Falls back to the
+     * original remote URL (non-theme-aware) until the icon has been downloaded and cached.
+     */
+    private resolveIconForWebview(iconUrl: string | undefined): string | { light: string; dark: string } | undefined {
+        const local = this.iconCacheManager.getLocalUri(iconUrl);
+        if (!local) {
+            return iconUrl;
+        }
+        if ("light" in local) {
+            return {
+                light: this.panel.webview.asWebviewUri(local.light).toString(),
+                dark: this.panel.webview.asWebviewUri(local.dark).toString(),
+            };
+        }
+        return this.panel.webview.asWebviewUri(local).toString();
     }
 
     private getHtmlForWebview(webview: vscode.Webview, initialView: ToolHostView): string {

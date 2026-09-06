@@ -5,6 +5,7 @@ import * as https from "https";
 import * as path from "path";
 import * as vscode from "vscode";
 import { logger } from "../utils/logger";
+import { parseContributorsFromRecord, parseVerifiedFromRecord, str } from "./toolRegistryManager";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,10 @@ export interface Tool {
     description?: string;
     /** Publisher / author of the tool. */
     publisher?: string;
+    /** Contributors to the tool. Can be a string or array of strings. */
+    contributors?: string[] | string;
+    /** Whether the tool is verified. */
+    isVerified?: boolean;
     /** URL from which the tool binary/archive can be downloaded. */
     download?: string;
     /** URL of the tool's icon image. */
@@ -95,12 +100,13 @@ export class ToolManager implements vscode.Disposable {
 
     /** Return every installed tool recorded in the manifest. */
     getAll(): InstalledTool[] {
-        return this.readManifest().sort((a, b) => a.name.localeCompare(b.name));
+        return this.readManifest().map((t) => this.enrichInstalledTool(t));
     }
 
     /** Return a single installed tool by its ID, or `undefined` if not found. */
     getById(id: string): InstalledTool | undefined {
-        return this.readManifest().find((t) => t.id === id);
+        const found = this.readManifest().find((t) => t.id === id);
+        return found ? this.enrichInstalledTool(found) : undefined;
     }
 
     /** Return `true` when a tool with the given ID is present in the manifest. */
@@ -114,6 +120,34 @@ export class ToolManager implements vscode.Disposable {
      */
     getToolPath(id: string): string {
         return path.join(this.toolsDir, id);
+    }
+
+    private enrichInstalledTool(tool: InstalledTool): InstalledTool {
+        const toolPath = tool.toolPath || path.join(this.toolsDir, tool.id);
+        const pkgPath = path.join(toolPath, "package.json");
+        let pkg: Record<string, unknown> | null = null;
+        if (fs.existsSync(pkgPath)) {
+            try {
+                pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+            } catch {
+                /* ignore */
+            }
+        }
+
+        const merged = pkg ? { ...tool, ...pkg } : (tool as unknown as Record<string, unknown>);
+        const contributors = parseContributorsFromRecord(merged) ?? tool.contributors;
+        const isVerified = parseVerifiedFromRecord(merged) || Boolean(tool.isVerified);
+        const publisher = (pkg && str(pkg["publisher"])) ?? tool.publisher ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
+
+        return {
+            ...tool,
+            toolPath,
+            contributors,
+            isVerified,
+            publisher,
+            description: (pkg && str(pkg["description"])) ?? tool.description,
+            version: (pkg && str(pkg["version"])) ?? tool.version,
+        };
     }
 
     // ---------------------------------------------------------------------------
@@ -182,8 +216,28 @@ export class ToolManager implements vscode.Disposable {
         const files = fs.existsSync(toolDir) ? fs.readdirSync(toolDir) : [];
         this.output.appendLine(`  Files in toolDir (${files.length}): ${files.join(", ") || "(none)"}`);
 
+        const pkgPath = path.join(toolDir, "package.json");
+        let pkg: Record<string, unknown> | null = null;
+        if (fs.existsSync(pkgPath)) {
+            try {
+                pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+            } catch {
+                /* ignore */
+            }
+        }
+
+        const merged = pkg ? { ...tool, ...pkg } : (tool as unknown as Record<string, unknown>);
+        const contributors = parseContributorsFromRecord(merged) ?? tool.contributors;
+        const isVerified = parseVerifiedFromRecord(merged) || Boolean(tool.isVerified);
+        const publisher = (pkg && str(pkg["publisher"])) ?? tool.publisher ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
+
         const installed: InstalledTool = {
             ...tool,
+            contributors,
+            isVerified,
+            publisher,
+            description: (pkg && str(pkg["description"])) ?? tool.description,
+            version: (pkg && str(pkg["version"])) ?? tool.version,
             installedAt: new Date().toISOString(),
             toolPath: toolDir,
         };

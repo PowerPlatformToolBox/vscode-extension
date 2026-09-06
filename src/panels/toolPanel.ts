@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
 import * as vscode from "vscode";
+import { TOOL_SETTINGS_KEY_PREFIX } from "../constants";
 import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
@@ -64,6 +65,7 @@ export class ToolPanel {
 
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
+    private readonly context: vscode.ExtensionContext;
     private readonly toolManager: ToolManager;
     private readonly toolRegistryManager: ToolRegistryManager;
     private readonly connectionsManager?: ConnectionsManager;
@@ -72,7 +74,6 @@ export class ToolPanel {
 
     private toolContext: ToolContext;
 
-    private readonly toolSettings = new Map<string, Record<string, unknown>>();
     private readonly terminalManager = new TerminalManager();
     private readonly eventHistory: ToolBoxEventPayload[] = [];
     private disposables: vscode.Disposable[] = [];
@@ -80,6 +81,7 @@ export class ToolPanel {
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
+        context: vscode.ExtensionContext,
         toolId: string,
         toolManager: ToolManager,
         toolRegistryManager: ToolRegistryManager,
@@ -88,6 +90,7 @@ export class ToolPanel {
     ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
+        this.context = context;
         this.toolManager = toolManager;
         this.toolRegistryManager = toolRegistryManager;
         this.connectionsManager = managers?.connectionsManager;
@@ -145,14 +148,21 @@ export class ToolPanel {
      * Validates the active connection and prompts for a secondary connection when
      * the tool's package.json declares `features.multiConnection`.
      */
-    static open(extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers): void {
-        ToolPanel.openAsync(extensionUri, toolId, toolManager, toolRegistryManager, managers).catch((err: unknown) => {
+    static open(extensionUri: vscode.Uri, context: vscode.ExtensionContext, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers): void {
+        ToolPanel.openAsync(extensionUri, context, toolId, toolManager, toolRegistryManager, managers).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error("ToolPanel.open error:", msg);
         });
     }
 
-    private static async openAsync(extensionUri: vscode.Uri, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers): Promise<void> {
+    private static async openAsync(
+        extensionUri: vscode.Uri,
+        context: vscode.ExtensionContext,
+        toolId: string,
+        toolManager: ToolManager,
+        toolRegistryManager: ToolRegistryManager,
+        managers?: OpenManagers,
+    ): Promise<void> {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
 
         const existing = ToolPanel.panels.get(toolId);
@@ -209,7 +219,7 @@ export class ToolPanel {
             });
 
             const initialContext: Partial<ToolContext> = { secondaryConnectionId, secondaryConnectionUrl };
-            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, toolId, toolManager, toolRegistryManager, managers, initialContext));
+            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, initialContext));
             return;
         }
 
@@ -224,7 +234,7 @@ export class ToolPanel {
             retainContextWhenHidden: true,
         });
 
-        ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, toolId, toolManager, toolRegistryManager, managers));
+        ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers));
     }
 
     /**
@@ -647,9 +657,14 @@ export class ToolPanel {
         }
     }
 
+    private toolSettingsKey(): string {
+        const toolId = this.toolContext.toolId ?? "unknown-tool";
+        return `${TOOL_SETTINGS_KEY_PREFIX}${toolId}`;
+    }
+
     private async dispatchSettings(method: string, args: unknown[]): Promise<unknown> {
         const toolId = this.toolContext.toolId ?? "unknown-tool";
-        const existing = this.toolSettings.get(toolId) ?? {};
+        const existing = this.context.globalState.get<Record<string, unknown>>(this.toolSettingsKey(), {});
 
         switch (method) {
             case "getAll":
@@ -659,13 +674,13 @@ export class ToolPanel {
             case "set": {
                 const key = String(args[0]);
                 const value = args[1];
-                this.toolSettings.set(toolId, { ...existing, [key]: value });
+                await this.context.globalState.update(this.toolSettingsKey(), { ...existing, [key]: value });
                 this.pushEvent("settings:updated", { toolId, key });
                 return;
             }
             case "setAll": {
                 const value = args[0] && typeof args[0] === "object" ? (args[0] as Record<string, unknown>) : {};
-                this.toolSettings.set(toolId, value);
+                await this.context.globalState.update(this.toolSettingsKey(), value);
                 this.pushEvent("settings:updated", { toolId });
                 return;
             }

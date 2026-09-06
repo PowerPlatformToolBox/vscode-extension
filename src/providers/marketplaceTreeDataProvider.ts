@@ -1,16 +1,40 @@
 import * as vscode from "vscode";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { ToolManager } from "../managers/toolManager";
-import type { RegistryTool, ToolRegistryManager } from "../managers/toolRegistryManager";
+import { formatContributors, type RegistryTool, type ToolRegistryManager } from "../managers/toolRegistryManager";
 
 export class MarketplaceToolTreeItem extends vscode.TreeItem {
     readonly registryTool: RegistryTool | undefined;
 
     constructor(tool: RegistryTool, isInstalled: boolean, iconCacheManager: IconCacheManager) {
-        super(tool.name, vscode.TreeItemCollapsibleState.None);
+        const isVerified = Boolean(tool.isVerified);
+        // TreeItem labels render as plain text, so a Unicode glyph is used instead of a codicon ($(...) is not interpreted here).
+        const label = isVerified ? `${tool.name} \u2713` : tool.name;
+        super(label, vscode.TreeItemCollapsibleState.None);
         this.registryTool = tool;
-        this.description = tool.publisher ?? tool.version;
-        this.tooltip = tool.description ?? tool.name;
+
+        const contributors = formatContributors(tool.contributors) || tool.publisher;
+        this.description = [contributors, tool.version ? `v${tool.version}` : undefined].filter(Boolean).join(" · ");
+
+        const tooltip = new vscode.MarkdownString();
+        tooltip.supportThemeIcons = true;
+        tooltip.appendMarkdown(`**${tool.name}**${isVerified ? " $(verified-filled) *(Verified)*" : ""}\n\n`);
+        if (contributors) {
+            tooltip.appendMarkdown(`**Contributor(s):** ${contributors}\n\n`);
+        }
+        if (tool.publisher && tool.publisher !== contributors) {
+            tooltip.appendMarkdown(`**Publisher:** ${tool.publisher}\n\n`);
+        }
+        if (tool.category) {
+            tooltip.appendMarkdown(`**Category:** ${tool.category}\n\n`);
+        }
+        tooltip.appendMarkdown(`**Version:** ${tool.version}\n\n`);
+        if (tool.description) {
+            tooltip.appendMarkdown(`${tool.description}`);
+        }
+        tooltip.isTrusted = true;
+        this.tooltip = tooltip;
+
         this.iconPath = iconCacheManager.getLocalUri(tool.icon) ?? new vscode.ThemeIcon(isInstalled ? "check" : "extensions");
         this.contextValue = isInstalled ? "pptb.marketplaceTool.installed" : "pptb.marketplaceTool";
     }
@@ -88,6 +112,8 @@ export class MarketplaceTreeDataProvider implements vscode.TreeDataProvider<AnyI
             return [new PlaceholderTreeItem("No tools found.")];
         }
 
-        return this.tools.map((t) => new MarketplaceToolTreeItem(t, this.toolManager.isInstalled(t.id), this.iconCacheManager));
+        // Verified tools first; stable sort preserves relative order otherwise.
+        const sorted = [...this.tools].sort((a, b) => Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified)));
+        return sorted.map((t) => new MarketplaceToolTreeItem(t, this.toolManager.isInstalled(t.id), this.iconCacheManager));
     }
 }

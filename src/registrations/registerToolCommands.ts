@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ConnectionsManager } from "../managers/connectionsManager";
 import { DataverseManager } from "../managers/dataverseManager";
+import type { IconCacheManager } from "../managers/iconCacheManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { ToolHostPanel } from "../panels/toolHostPanel";
@@ -16,6 +17,7 @@ export function registerToolCommands(
     dataverseManager: DataverseManager,
     installedToolsProvider: InstalledToolsTreeDataProvider,
     marketplaceProvider: MarketplaceTreeDataProvider,
+    iconCacheManager: IconCacheManager,
 ): vscode.Disposable[] {
     const refreshInstalledCmd = vscode.commands.registerCommand("pptb.tools.refresh", () => installedToolsProvider.refresh());
 
@@ -37,15 +39,15 @@ export function registerToolCommands(
         if (!item?.tool.id) {
             return;
         }
-        ToolPanel.open(context.extensionUri, item.tool.id, toolManager, toolRegistryManager, { connectionsManager, dataverseManager });
+        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, { connectionsManager, dataverseManager });
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
-        ToolHostPanel.open(context.extensionUri, toolRegistryManager, toolManager, "installed", { connectionsManager, dataverseManager });
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, iconCacheManager, "installed", { connectionsManager, dataverseManager });
     });
 
     const browseMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.browse", () => {
-        ToolHostPanel.open(context.extensionUri, toolRegistryManager, toolManager, "marketplace", { connectionsManager, dataverseManager });
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, iconCacheManager, "marketplace", { connectionsManager, dataverseManager });
     });
 
     const marketplaceUninstallCmd = vscode.commands.registerCommand("pptb.marketplace.uninstall", async (item?: MarketplaceToolTreeItem) => {
