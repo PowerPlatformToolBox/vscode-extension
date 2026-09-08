@@ -2,7 +2,7 @@
   "name": "power-platform-toolbox",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "PowerPlatformToolBox",
   "preview": true,
   "license": "GPL-3.0",
@@ -124,6 +124,24 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "pptb.tools.sortAndFilter",
+        "title": "%command.tools.sortAndFilter.title%",
+        "category": "%command.category%",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "pptb.tools.addFavorite",
+        "title": "%command.tools.addFavorite.title%",
+        "category": "%command.category%",
+        "icon": "$(star-empty)"
+      },
+      {
+        "command": "pptb.tools.removeFavorite",
+        "title": "%command.tools.removeFavorite.title%",
+        "category": "%command.category%",
+        "icon": "$(star-full)"
+      },
+      {
         "command": "pptb.tools.uninstall",
         "title": "%command.tools.uninstall.title%",
         "category": "%command.category%",
@@ -134,6 +152,12 @@
         "title": "%command.marketplace.refresh.title%",
         "category": "%command.category%",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "pptb.marketplace.sortAndFilter",
+        "title": "%command.marketplace.sortAndFilter.title%",
+        "category": "%command.category%",
+        "icon": "$(filter)"
       },
       {
         "command": "pptb.marketplace.install",
@@ -246,12 +270,22 @@
           "group": "navigation"
         },
         {
+          "command": "pptb.tools.sortAndFilter",
+          "when": "view == pptb.installedToolsView",
+          "group": "navigation"
+        },
+        {
           "command": "pptb.marketplace.browse",
           "when": "view == pptb.marketplaceView",
           "group": "navigation"
         },
         {
           "command": "pptb.marketplace.refresh",
+          "when": "view == pptb.marketplaceView",
+          "group": "navigation"
+        },
+        {
+          "command": "pptb.marketplace.sortAndFilter",
           "when": "view == pptb.marketplaceView",
           "group": "navigation"
         },
@@ -334,17 +368,37 @@
         },
         {
           "command": "pptb.tools.launch",
-          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
           "group": "inline@1"
         },
         {
-          "command": "pptb.tools.launch",
+          "command": "pptb.tools.addFavorite",
           "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "group": "inline@2"
+        },
+        {
+          "command": "pptb.tools.removeFavorite",
+          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool.favorite",
+          "group": "inline@2"
+        },
+        {
+          "command": "pptb.tools.launch",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
           "group": "1_manage@1"
         },
         {
-          "command": "pptb.tools.uninstall",
+          "command": "pptb.tools.addFavorite",
           "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "group": "1_manage@2"
+        },
+        {
+          "command": "pptb.tools.removeFavorite",
+          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool.favorite",
+          "group": "1_manage@2"
+        },
+        {
+          "command": "pptb.tools.uninstall",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
           "group": "2_manage@1"
         },
         {

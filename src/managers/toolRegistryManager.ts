@@ -30,10 +30,25 @@ export interface RegistryTool {
      * main executable (e.g. "bin/pac" or "pac.exe").
      */
     executableRelativePath?: string;
-    /** Category grouping for this tool (e.g. "CLI", "DevOps"). */
-    category?: string;
+    /** Category groupings for this tool (e.g. "CLI", "DevOps"). */
+    categories?: string[];
     /** Capability tags that describe what this tool can do. */
     capabilityTags?: string[];
+    /** Total download count (analytics), when available. */
+    downloads?: number;
+    /** Average user rating (analytics), when available. */
+    rating?: number;
+    /** Monthly Active Users (analytics), when available. */
+    mau?: number;
+}
+
+/**
+ * Analytics counters for a single tool, as tracked in the `tool_analytics` table.
+ */
+export interface ToolAnalytics {
+    downloads?: number;
+    rating?: number;
+    mau?: number;
 }
 
 /**
@@ -115,20 +130,33 @@ export class ToolRegistryManager {
         const from = (page - 1) * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        let query = this.client.from("tools").select("*", { count: "exact" }).range(from, to);
+        const buildQuery = (selectColumns: string) => {
+            // Typed as `any`: supabase-js infers row shape from the literal `selectColumns`
+            // string, which breaks down once it's widened to `string` here — that's fine
+            // since we parse rows manually via `mapRow` regardless of the inferred type.
+            let q = this.client!.from("tools").select(selectColumns, { count: "exact" }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            q = q.range(from, to);
+            if (category) {
+                q = q.eq("category", category);
+            }
+            if (search) {
+                // Escape PostgREST ILIKE special characters so literal percent-signs,
+                // underscores, and backslashes in the search term are treated as text.
+                const escaped = search.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+                q = q.or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%`);
+            }
+            return q as Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null }>;
+        };
 
-        if (category) {
-            query = query.eq("category", category);
+        // Attempt to embed the `tool_analytics` (downloads/rating/mau) and `tool_categories`
+        // relations so Popularity/Highly Rated/Most Downloaded sorting and the Category filter
+        // have data to work with. Fall back to a plain query when either relation isn't
+        // configured in this Supabase project so those features simply degrade to "no data".
+        let { data, error, count } = await buildQuery("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name))");
+        if (error) {
+            this.output.appendLine(`[Registry] getTools embedded-relations query failed, retrying without them: ${error.message}`);
+            ({ data, error, count } = await buildQuery("*"));
         }
-
-        if (search) {
-            // Escape PostgREST ILIKE special characters so literal percent-signs,
-            // underscores, and backslashes in the search term are treated as text.
-            const escaped = search.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-            query = query.or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%`);
-        }
-
-        const { data, error, count } = await query;
 
         if (error) {
             this.output.appendLine(`[Registry] getTools error: ${error.message}`);
@@ -160,6 +188,39 @@ export class ToolRegistryManager {
     }
 
     /**
+     * Fetch download/rating/MAU analytics for a set of tool IDs (used to sort
+     * installed tools by Popularity/Highly Rated/Most Downloaded, mirroring the
+     * desktop app's `tool_analytics` lookup). Returns an empty map when the
+     * client isn't configured, no IDs are given, or the query fails.
+     */
+    async getAnalytics(toolIds: string[]): Promise<Map<string, ToolAnalytics>> {
+        const map = new Map<string, ToolAnalytics>();
+        if (!this.client || toolIds.length === 0) {
+            return map;
+        }
+
+        const { data, error } = await this.client.from("tools").select("id, tool_analytics(downloads,rating,mau)").in("id", toolIds);
+
+        if (error) {
+            this.output.appendLine(`[Registry] getAnalytics error: ${error.message}`);
+            return map;
+        }
+
+        for (const row of (data ?? []) as Record<string, unknown>[]) {
+            const id = str(row["id"]);
+            if (!id) {
+                continue;
+            }
+            const analytics = parseAnalyticsFromRecord(row);
+            if (analytics) {
+                map.set(id, analytics);
+            }
+        }
+
+        return map;
+    }
+
+    /**
      * Fetch a single tool from the registry by its ID.
      * Returns `null` if the tool is not found or the client is not configured.
      */
@@ -168,7 +229,10 @@ export class ToolRegistryManager {
             return null;
         }
 
-        const { data, error } = await this.client.from("tools").select("*").eq("id", id).single();
+        let { data, error } = await this.client.from("tools").select("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name))").eq("id", id).single();
+        if (error) {
+            ({ data, error } = await this.client.from("tools").select("*").eq("id", id).single());
+        }
 
         if (error || !data) {
             return null;
@@ -404,10 +468,68 @@ export function formatContributors(contributors?: string[] | string): string | u
     return contributors;
 }
 
+/**
+ * Parse an embedded/joined `tool_analytics(downloads,rating,mau)` relation off a
+ * raw Supabase row. PostgREST returns to-one embeds as either a single object or
+ * (depending on FK cardinality detection) a one-element array.
+ */
+function parseAnalyticsFromRecord(row: Record<string, unknown>): ToolAnalytics | undefined {
+    const raw = row["tool_analytics"];
+    const analytics = Array.isArray(raw) ? raw[0] : raw;
+    if (!analytics || typeof analytics !== "object") {
+        return undefined;
+    }
+    const a = analytics as Record<string, unknown>;
+    const downloads = typeof a["downloads"] === "number" ? a["downloads"] : undefined;
+    const rating = typeof a["rating"] === "number" ? a["rating"] : undefined;
+    const mau = typeof a["mau"] === "number" ? a["mau"] : undefined;
+    if (downloads === undefined && rating === undefined && mau === undefined) {
+        return undefined;
+    }
+    return { downloads, rating, mau };
+}
+
+/**
+ * Parse category names off a raw Supabase row. Supports the normalized
+ * `tool_categories(categories(name))` many-to-many join (an array of `{ categories: { name } }`
+ * entries), a flat `categories` array column, or a flat `category` string column — whichever
+ * shape this Supabase project actually uses.
+ */
+function parseCategoriesFromRecord(row: Record<string, unknown>): string[] | undefined {
+    const joined = row["tool_categories"];
+    if (Array.isArray(joined)) {
+        const names = joined
+            .map((entry) => {
+                if (!entry || typeof entry !== "object") {
+                    return undefined;
+                }
+                const nested = (entry as Record<string, unknown>)["categories"];
+                const category = Array.isArray(nested) ? nested[0] : nested;
+                return category && typeof category === "object" ? str((category as Record<string, unknown>)["name"]) : undefined;
+            })
+            .filter((n): n is string => !!n);
+        if (names.length > 0) {
+            return names;
+        }
+    }
+
+    const flatArray = row["categories"];
+    if (Array.isArray(flatArray)) {
+        const names = flatArray.filter((v): v is string => typeof v === "string" && v.length > 0);
+        if (names.length > 0) {
+            return names;
+        }
+    }
+
+    const single = str(row["category"]);
+    return single ? [single] : undefined;
+}
+
 function mapRow(row: Record<string, unknown>): RegistryTool {
     const contributors = parseContributorsFromRecord(row);
     const publisher = str(row["publisher"]) ?? str(row["author"]) ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
     const isVerified = parseVerifiedFromRecord(row);
+    const analytics = parseAnalyticsFromRecord(row);
 
     return {
         id: str(row["id"]) ?? "",
@@ -420,7 +542,10 @@ function mapRow(row: Record<string, unknown>): RegistryTool {
         download: str(row["download"]),
         icon: str(row["icon"]),
         executableRelativePath: str(row["executableRelativePath"]) ?? str(row["executable_relative_path"]),
-        category: str(row["category"]),
+        categories: parseCategoriesFromRecord(row),
         capabilityTags: (Array.isArray(row["capabilityTags"]) ? row["capabilityTags"] : Array.isArray(row["capability_tags"]) ? row["capability_tags"] : undefined) as string[] | undefined,
+        downloads: analytics?.downloads,
+        rating: analytics?.rating,
+        mau: analytics?.mau,
     };
 }

@@ -37,13 +37,13 @@ export function activate(context: vscode.ExtensionContext): void {
         showCollapseAll: true,
     });
 
-    const installedToolsProvider = new InstalledToolsTreeDataProvider(toolManager, iconCacheManager);
+    const installedToolsProvider = new InstalledToolsTreeDataProvider(context, toolManager, toolRegistryManager, iconCacheManager);
     const installedToolsView = vscode.window.createTreeView("pptb.installedToolsView", {
         treeDataProvider: installedToolsProvider,
         showCollapseAll: false,
     });
 
-    const marketplaceProvider = new MarketplaceTreeDataProvider(toolRegistryManager, toolManager, iconCacheManager);
+    const marketplaceProvider = new MarketplaceTreeDataProvider(context, toolRegistryManager, toolManager, iconCacheManager);
     const marketplaceView = vscode.window.createTreeView("pptb.marketplaceView", {
         treeDataProvider: marketplaceProvider,
         showCollapseAll: false,

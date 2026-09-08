@@ -4,6 +4,7 @@ import * as http from "http";
 import * as https from "https";
 import * as path from "path";
 import * as vscode from "vscode";
+import { FAVORITE_TOOLS_KEY } from "../constants";
 import { logger } from "../utils/logger";
 import { parseContributorsFromRecord, parseVerifiedFromRecord, str } from "./toolRegistryManager";
 
@@ -36,6 +37,8 @@ export interface Tool {
      * main executable (e.g. "bin/pac" or "pac.exe").
      */
     executableRelativePath?: string;
+    /** Category groupings for this tool (e.g. "CLI", "DevOps"). */
+    categories?: string[];
 }
 
 /**
@@ -53,6 +56,22 @@ export interface InstalledTool extends Tool {
 
 /** Shape of the installed.json manifest file. */
 type Manifest = InstalledTool[];
+
+/** Parse a `categories` array or single `category` string off a tool's package.json. */
+function parseCategoriesFromPackage(pkg: Record<string, unknown> | null): string[] | undefined {
+    if (!pkg) {
+        return undefined;
+    }
+    const arr = pkg["categories"];
+    if (Array.isArray(arr)) {
+        const names = arr.filter((v): v is string => typeof v === "string" && v.length > 0);
+        if (names.length > 0) {
+            return names;
+        }
+    }
+    const single = str(pkg["category"]);
+    return single ? [single] : undefined;
+}
 
 // ── ToolManager ───────────────────────────────────────────────────────────────
 
@@ -85,8 +104,10 @@ export class ToolManager implements vscode.Disposable {
     readonly manifestPath: string;
 
     private readonly output: vscode.OutputChannel;
+    private readonly context: vscode.ExtensionContext;
 
     constructor(context: vscode.ExtensionContext) {
+        this.context = context;
         this.toolsDirUri = vscode.Uri.joinPath(context.globalStorageUri, "tools");
         this.toolsDir = this.toolsDirUri.fsPath;
         this.manifestPath = path.join(this.toolsDir, "installed.json");
@@ -112,6 +133,31 @@ export class ToolManager implements vscode.Disposable {
     /** Return `true` when a tool with the given ID is present in the manifest. */
     isInstalled(id: string): boolean {
         return this.readManifest().some((t) => t.id === id);
+    }
+
+    /** Return the IDs of tools marked as favorite. */
+    getFavorites(): string[] {
+        return this.context.globalState.get<string[]>(FAVORITE_TOOLS_KEY, []);
+    }
+
+    /** Return `true` when the given tool ID is marked as favorite. */
+    isFavorite(id: string): boolean {
+        return this.getFavorites().includes(id);
+    }
+
+    /** Toggle favorite status for a tool. Returns the new favorite state. */
+    async toggleFavorite(id: string): Promise<boolean> {
+        const favorites = this.getFavorites();
+        const index = favorites.indexOf(id);
+        const isNowFavorite = index === -1;
+        if (isNowFavorite) {
+            favorites.push(id);
+        } else {
+            favorites.splice(index, 1);
+        }
+        await this.context.globalState.update(FAVORITE_TOOLS_KEY, favorites);
+        this._onToolsChanged.fire();
+        return isNowFavorite;
     }
 
     /**
@@ -147,6 +193,7 @@ export class ToolManager implements vscode.Disposable {
             publisher,
             description: (pkg && str(pkg["description"])) ?? tool.description,
             version: (pkg && str(pkg["version"])) ?? tool.version,
+            categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
         };
     }
 
@@ -238,6 +285,7 @@ export class ToolManager implements vscode.Disposable {
             publisher,
             description: (pkg && str(pkg["description"])) ?? tool.description,
             version: (pkg && str(pkg["version"])) ?? tool.version,
+            categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
             installedAt: new Date().toISOString(),
             toolPath: toolDir,
         };

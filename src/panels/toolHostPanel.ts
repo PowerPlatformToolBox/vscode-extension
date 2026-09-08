@@ -5,6 +5,8 @@ import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
+import type { InstalledToolsFilterState, InstalledToolsSortOption, InstalledToolsTreeDataProvider } from "../providers/installedToolsTreeDataProvider";
+import type { MarketplaceFilterState, MarketplaceSortOption, MarketplaceTreeDataProvider } from "../providers/marketplaceTreeDataProvider";
 import { logger } from "../utils/logger";
 import { getNonce } from "../utils/webview";
 import { ToolPanel } from "./toolPanel";
@@ -29,6 +31,8 @@ export class ToolHostPanel {
     private readonly context: vscode.ExtensionContext;
     private readonly toolManager: ToolManager;
     private readonly toolRegistryManager: ToolRegistryManager;
+    private readonly installedToolsProvider: InstalledToolsTreeDataProvider;
+    private readonly marketplaceProvider: MarketplaceTreeDataProvider;
     private readonly iconCacheManager: IconCacheManager;
     private readonly managers?: OpenManagers;
     private disposables: vscode.Disposable[] = [];
@@ -40,6 +44,8 @@ export class ToolHostPanel {
         context: vscode.ExtensionContext,
         toolRegistryManager: ToolRegistryManager,
         toolManager: ToolManager,
+        installedToolsProvider: InstalledToolsTreeDataProvider,
+        marketplaceProvider: MarketplaceTreeDataProvider,
         iconCacheManager: IconCacheManager,
         initialView: ToolHostView,
         managers?: OpenManagers,
@@ -49,6 +55,8 @@ export class ToolHostPanel {
         this.context = context;
         this.toolManager = toolManager;
         this.toolRegistryManager = toolRegistryManager;
+        this.installedToolsProvider = installedToolsProvider;
+        this.marketplaceProvider = marketplaceProvider;
         this.iconCacheManager = iconCacheManager;
         this.managers = managers;
 
@@ -57,7 +65,7 @@ export class ToolHostPanel {
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
         this.panel.webview.onDidReceiveMessage(
-            (message: { type: string; toolId?: string; search?: string; page?: number }) => {
+            (message: { type: string; toolId?: string; search?: string; page?: number; sort?: string; filter?: unknown }) => {
                 this.handleMessage(message).catch((err: unknown) => {
                     const msg = err instanceof Error ? err.message : String(err);
                     logger.error("ToolHostPanel message handler error:", msg);
@@ -69,6 +77,16 @@ export class ToolHostPanel {
 
         // Re-push tool lists once newly downloaded icons are theme-aware and ready on disk.
         this.disposables.push(this.iconCacheManager.onIconsCached(() => this.refreshIcons()));
+
+        // Keep the webview in sync with sort/filter/favorite changes made from the tree views (and vice versa).
+        this.disposables.push(this.installedToolsProvider.onDidChangeTreeData(() => this.postInstalledTools()));
+        this.disposables.push(
+            this.marketplaceProvider.onDidChangeTreeData(() => {
+                if (this.lastMarketplaceSearch !== undefined) {
+                    void this.postMarketplaceTools(this.lastMarketplaceSearch || undefined, 1);
+                }
+            }),
+        );
     }
 
     /**
@@ -79,6 +97,8 @@ export class ToolHostPanel {
         context: vscode.ExtensionContext,
         toolRegistryManager: ToolRegistryManager,
         toolManager: ToolManager,
+        installedToolsProvider: InstalledToolsTreeDataProvider,
+        marketplaceProvider: MarketplaceTreeDataProvider,
         iconCacheManager: IconCacheManager,
         initialView: ToolHostView = "installed",
         managers?: OpenManagers,
@@ -98,7 +118,18 @@ export class ToolHostPanel {
             retainContextWhenHidden: true,
         });
 
-        ToolHostPanel.currentPanel = new ToolHostPanel(panel, extensionUri, context, toolRegistryManager, toolManager, iconCacheManager, initialView, managers);
+        ToolHostPanel.currentPanel = new ToolHostPanel(
+            panel,
+            extensionUri,
+            context,
+            toolRegistryManager,
+            toolManager,
+            installedToolsProvider,
+            marketplaceProvider,
+            iconCacheManager,
+            initialView,
+            managers,
+        );
     }
 
     dispose(): void {
@@ -110,7 +141,7 @@ export class ToolHostPanel {
         this.disposables = [];
     }
 
-    private async handleMessage(message: { type: string; toolId?: string; search?: string; page?: number }): Promise<void> {
+    private async handleMessage(message: { type: string; toolId?: string; search?: string; page?: number; sort?: string; filter?: unknown }): Promise<void> {
         switch (message.type) {
             case "get-installed-tools": {
                 this.postInstalledTools();
@@ -119,6 +150,29 @@ export class ToolHostPanel {
             case "get-marketplace-tools": {
                 this.lastMarketplaceSearch = message.search ?? "";
                 await this.postMarketplaceTools(message.search, message.page ?? 1);
+                break;
+            }
+            case "set-installed-sort": {
+                await this.installedToolsProvider.setSortOption(message.sort as InstalledToolsSortOption);
+                break;
+            }
+            case "set-installed-filter": {
+                await this.installedToolsProvider.setFilterState((message.filter as InstalledToolsFilterState) ?? {});
+                break;
+            }
+            case "set-marketplace-sort": {
+                await this.marketplaceProvider.setSortOption(message.sort as MarketplaceSortOption);
+                break;
+            }
+            case "set-marketplace-filter": {
+                await this.marketplaceProvider.setFilterState((message.filter as MarketplaceFilterState) ?? {});
+                break;
+            }
+            case "toggle-favorite": {
+                const toolId = message.toolId;
+                if (toolId) {
+                    await this.toolManager.toggleFavorite(toolId);
+                }
                 break;
             }
             case "launch-tool": {
@@ -173,22 +227,31 @@ export class ToolHostPanel {
     }
 
     private postInstalledTools(): void {
-        const installedTools = this.toolManager.getAll();
+        const installedTools = this.installedToolsProvider.applyFilterAndSort(this.toolManager.getAll());
+        const favorites = this.toolManager.getFavorites();
         this.panel.webview.postMessage({
             type: "installed-tools",
             tools: installedTools.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
+            categories: this.installedToolsProvider.getAvailableCategories(),
+            sort: this.installedToolsProvider.getSortOption(),
+            filter: this.installedToolsProvider.getFilterState(),
+            favorites,
         });
     }
 
     private async postMarketplaceTools(search: string | undefined, page: number): Promise<void> {
         try {
             const result = await this.toolRegistryManager.getTools({ search, page });
+            const filteredSorted = this.marketplaceProvider.applyFilterAndSort(result.tools);
             const installedIds = new Set(this.toolManager.getAll().map((t) => t.id));
             this.panel.webview.postMessage({
                 type: "marketplace-tools",
-                tools: result.tools.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
+                tools: filteredSorted.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
                 total: result.total,
                 installedIds: [...installedIds],
+                categories: this.marketplaceProvider.getAvailableCategories(),
+                sort: this.marketplaceProvider.getSortOption(),
+                filter: this.marketplaceProvider.getFilterState(),
             });
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);

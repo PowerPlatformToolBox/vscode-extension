@@ -15,6 +15,7 @@ interface InstalledTool {
     publisher?: string;
     contributors?: string[] | string;
     isVerified?: boolean;
+    categories?: string[];
     icon?: ToolIconSource;
     toolPath: string;
     installedAt: string;
@@ -28,9 +29,41 @@ interface RegistryTool {
     publisher?: string;
     contributors?: string[] | string;
     isVerified?: boolean;
+    categories?: string[];
     icon?: ToolIconSource;
-    category?: string;
 }
+
+type InstalledSortOption = "favorite" | "name-asc" | "name-desc" | "popularity" | "rating" | "downloads" | "verified";
+type MarketplaceSortOption = "name-asc" | "name-desc" | "popularity" | "rating" | "downloads" | "verified";
+
+interface InstalledFilterState {
+    category?: string;
+    verifiedOnly?: boolean;
+}
+
+interface MarketplaceFilterState {
+    category?: string;
+    verifiedOnly?: boolean;
+}
+
+const INSTALLED_SORT_OPTIONS: { label: string; value: InstalledSortOption }[] = [
+    { label: "Favorite", value: "favorite" },
+    { label: "Name (A-Z)", value: "name-asc" },
+    { label: "Name (Z-A)", value: "name-desc" },
+    { label: "Popularity", value: "popularity" },
+    { label: "Highly Rated", value: "rating" },
+    { label: "Most Downloaded", value: "downloads" },
+    { label: "Verified", value: "verified" },
+];
+
+const MARKETPLACE_SORT_OPTIONS: { label: string; value: MarketplaceSortOption }[] = [
+    { label: "Name (A-Z)", value: "name-asc" },
+    { label: "Name (Z-A)", value: "name-desc" },
+    { label: "Popularity", value: "popularity" },
+    { label: "Highly Rated", value: "rating" },
+    { label: "Most Downloaded", value: "downloads" },
+    { label: "Verified", value: "verified" },
+];
 
 function formatContributors(contributors?: string[] | string): string | undefined {
     if (!contributors) {
@@ -89,6 +122,48 @@ const searchInput: React.CSSProperties = {
     fontSize: "inherit",
     fontFamily: "inherit",
     outline: "none",
+};
+
+const filterBar: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "6px 16px",
+    borderBottom: "1px solid var(--vscode-panel-border)",
+    flexShrink: 0,
+    flexWrap: "wrap",
+};
+
+const selectInput: React.CSSProperties = {
+    background: "var(--vscode-dropdown-background)",
+    color: "var(--vscode-dropdown-foreground)",
+    border: "1px solid var(--vscode-dropdown-border, var(--vscode-panel-border))",
+    borderRadius: 2,
+    padding: "3px 6px",
+    fontSize: "inherit",
+    fontFamily: "inherit",
+    outline: "none",
+};
+
+const checkboxLabel: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 11,
+    color: "var(--vscode-foreground)",
+    cursor: "pointer",
+    userSelect: "none",
+};
+
+const favoriteBtn: React.CSSProperties = {
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 15,
+    lineHeight: 1,
+    padding: 2,
+    flexShrink: 0,
+    color: "var(--vscode-descriptionForeground)",
 };
 
 const listArea: React.CSSProperties = {
@@ -290,6 +365,10 @@ function InstalledToolsTab(): React.ReactElement {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const [sort, setSort] = useState<InstalledSortOption>("name-asc");
+    const [filter, setFilter] = useState<InstalledFilterState>({});
+    const [categories, setCategories] = useState<string[]>([]);
+    const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         vscodeApi.postMessage({ type: "get-installed-tools" });
@@ -299,6 +378,10 @@ function InstalledToolsTab(): React.ReactElement {
             const data = event.data as any;
             if (data?.type === "installed-tools") {
                 setTools(data.tools ?? []);
+                setSort(data.sort ?? "name-asc");
+                setFilter(data.filter ?? {});
+                setCategories(data.categories ?? []);
+                setFavorites(new Set(data.favorites ?? []));
                 setLoading(false);
             }
             if (data?.type === "uninstall-done") {
@@ -318,6 +401,22 @@ function InstalledToolsTab(): React.ReactElement {
         vscodeApi.postMessage({ type: "uninstall-tool", toolId: tool.id });
     };
 
+    const toggleFavorite = (tool: InstalledTool) => {
+        vscodeApi.postMessage({ type: "toggle-favorite", toolId: tool.id });
+    };
+
+    const changeSort = (value: InstalledSortOption) => {
+        setSort(value);
+        vscodeApi.postMessage({ type: "set-installed-sort", sort: value });
+    };
+
+    const changeFilter = (next: InstalledFilterState) => {
+        setFilter(next);
+        vscodeApi.postMessage({ type: "set-installed-filter", filter: next });
+    };
+
+    // The extension host already applies the persisted sort/filter (category, verified-only);
+    // only free-text search is filtered locally here.
     const filtered = tools.filter(
         (t) =>
             !search ||
@@ -326,8 +425,6 @@ function InstalledToolsTab(): React.ReactElement {
             (t.publisher ?? "").toLowerCase().includes(search.toLowerCase()) ||
             (formatContributors(t.contributors) ?? "").toLowerCase().includes(search.toLowerCase()),
     );
-    // Verified tools first; stable sort preserves relative order otherwise.
-    const sorted = [...filtered].sort((a, b) => Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified)));
 
     return (
         <>
@@ -338,13 +435,42 @@ function InstalledToolsTab(): React.ReactElement {
                 </span>
             </div>
 
+            <div style={filterBar}>
+                <select style={selectInput} value={sort} onChange={(e) => changeSort(e.target.value as InstalledSortOption)} aria-label="Sort installed tools">
+                    <optgroup label="Sort">
+                        {INSTALLED_SORT_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                                {o.label}
+                            </option>
+                        ))}
+                    </optgroup>
+                </select>
+                {categories.length > 0 && (
+                    <select style={selectInput} value={filter.category ?? ""} onChange={(e) => changeFilter({ ...filter, category: e.target.value || undefined })} aria-label="Filter by category">
+                        <optgroup label="Filter">
+                            <option value="">All Categories</option>
+                            {categories.map((c) => (
+                                <option key={c} value={c}>
+                                    {c}
+                                </option>
+                            ))}
+                        </optgroup>
+                    </select>
+                )}
+                <label style={checkboxLabel}>
+                    <input type="checkbox" checked={Boolean(filter.verifiedOnly)} onChange={(e) => changeFilter({ ...filter, verifiedOnly: e.target.checked || undefined })} />
+                    Verified Only
+                </label>
+            </div>
+
             <div style={listArea}>
                 {loading && <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>Loading…</div>}
                 {!loading && filtered.length === 0 && <div style={{ ...hint, padding: "24px 16px", textAlign: "center" }}>{search ? "No tools match your search." : "No tools installed."}</div>}
                 {!loading && filtered.length > 0 && (
                     <div style={cardGrid}>
-                        {sorted.map((tool) => {
+                        {filtered.map((tool) => {
                             const isHovered = hoveredId === tool.id;
+                            const isFavorite = favorites.has(tool.id);
                             const contributorText = formatContributors(tool.contributors) || tool.publisher;
                             return (
                                 <div key={tool.id} style={{ ...card, ...(isHovered ? cardHover : {}) }} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)}>
@@ -359,13 +485,23 @@ function InstalledToolsTab(): React.ReactElement {
                                                 {contributorText ? `${contributorText} · v${tool.version}` : `v${tool.version}`}
                                             </div>
                                         </div>
+                                        <button
+                                            style={{ ...favoriteBtn, color: isFavorite ? "var(--vscode-charts-yellow, #e2c08d)" : favoriteBtn.color }}
+                                            onClick={() => toggleFavorite(tool)}
+                                            title={isFavorite ? "Remove from Favorites" : "Mark as Favorite"}
+                                            aria-label={isFavorite ? "Remove from Favorites" : "Mark as Favorite"}
+                                        >
+                                            {isFavorite ? "★" : "☆"}
+                                        </button>
                                     </div>
                                     <div style={{ ...hint, ...clampText, minHeight: 30 }}>{tool.description || " "}</div>
                                     <div style={cardFooter}>
-                                        <button style={{ ...secondaryBtn, flex: 1, fontSize: 11, padding: "5px 10px" }} onClick={() => uninstallTool(tool)}>
+                                        {tool.categories?.length ? <span style={categoryChip}>{tool.categories.join(", ")}</span> : null}
+                                        <span style={{ flex: 1 }} />
+                                        <button style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px" }} onClick={() => uninstallTool(tool)}>
                                             Uninstall
                                         </button>
-                                        <button style={{ ...primaryBtn, flex: 1, fontSize: 11, padding: "5px 10px" }} onClick={() => launchTool(tool)}>
+                                        <button style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }} onClick={() => launchTool(tool)}>
                                             Launch
                                         </button>
                                     </div>
@@ -389,6 +525,9 @@ function MarketplaceTab(): React.ReactElement {
     const [search, setSearch] = useState("");
     const [hoveredId, setHoveredId] = useState<string | null>(null);
     const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+    const [sort, setSort] = useState<MarketplaceSortOption>("name-asc");
+    const [filter, setFilter] = useState<MarketplaceFilterState>({});
+    const [categories, setCategories] = useState<string[]>([]);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const fetchTools = (q: string) => {
@@ -406,6 +545,9 @@ function MarketplaceTab(): React.ReactElement {
             if (data?.type === "marketplace-tools") {
                 setTools(data.tools ?? []);
                 setInstalledIds(new Set(data.installedIds ?? []));
+                setSort(data.sort ?? "name-asc");
+                setFilter(data.filter ?? {});
+                setCategories(data.categories ?? []);
                 setLoading(false);
             }
             if (data?.type === "marketplace-error") {
@@ -463,14 +605,52 @@ function MarketplaceTab(): React.ReactElement {
         vscodeApi.postMessage({ type: "uninstall-tool", toolId: tool.id });
     };
 
-    // Verified tools first; stable sort preserves relative order otherwise.
-    const sorted = [...tools].sort((a, b) => Number(Boolean(b.isVerified)) - Number(Boolean(a.isVerified)));
+    const changeSort = (value: MarketplaceSortOption) => {
+        setSort(value);
+        vscodeApi.postMessage({ type: "set-marketplace-sort", sort: value });
+    };
+
+    const changeFilter = (next: MarketplaceFilterState) => {
+        setFilter(next);
+        vscodeApi.postMessage({ type: "set-marketplace-filter", filter: next });
+    };
+
+    // The extension host already applies search, persisted sort, and persisted filter
+    // (category, verified-only) before sending `tools`, so no client-side re-sort is needed here.
 
     return (
         <>
             <div style={toolbar}>
                 <input style={searchInput} type="text" placeholder="Search marketplace…" value={search} onChange={(e) => handleSearch(e.target.value)} />
                 {!loading && <span style={{ ...hint, flexShrink: 0 }}>{tools.length} tools</span>}
+            </div>
+
+            <div style={filterBar}>
+                <select style={selectInput} value={sort} onChange={(e) => changeSort(e.target.value as MarketplaceSortOption)} aria-label="Sort marketplace tools">
+                    <optgroup label="Sort">
+                        {MARKETPLACE_SORT_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                                {o.label}
+                            </option>
+                        ))}
+                    </optgroup>
+                </select>
+                {categories.length > 0 && (
+                    <select style={selectInput} value={filter.category ?? ""} onChange={(e) => changeFilter({ ...filter, category: e.target.value || undefined })} aria-label="Filter by category">
+                        <optgroup label="Filter">
+                            <option value="">All Categories</option>
+                            {categories.map((c) => (
+                                <option key={c} value={c}>
+                                    {c}
+                                </option>
+                            ))}
+                        </optgroup>
+                    </select>
+                )}
+                <label style={checkboxLabel}>
+                    <input type="checkbox" checked={Boolean(filter.verifiedOnly)} onChange={(e) => changeFilter({ ...filter, verifiedOnly: e.target.checked || undefined })} />
+                    Verified Only
+                </label>
             </div>
 
             <div style={listArea}>
@@ -481,7 +661,7 @@ function MarketplaceTab(): React.ReactElement {
                 )}
                 {!loading && !error && tools.length > 0 && (
                     <div style={cardGrid}>
-                        {sorted.map((tool) => {
+                        {tools.map((tool) => {
                             const isInstalled = installedIds.has(tool.id);
                             const isBusy = busyIds.has(tool.id);
                             const isHovered = hoveredId === tool.id;
@@ -501,7 +681,7 @@ function MarketplaceTab(): React.ReactElement {
                                     </div>
                                     <div style={{ ...hint, ...clampText, minHeight: 30 }}>{tool.description || " "}</div>
                                     <div style={cardFooter}>
-                                        {tool.category && <span style={categoryChip}>{tool.category}</span>}
+                                        {tool.categories?.length ? <span style={categoryChip}>{tool.categories.join(", ")}</span> : null}
                                         {isInstalled && <span style={{ ...hint, color: "var(--vscode-testing-iconPassed, #73c991)" }}>✓ Installed</span>}
                                         <span style={{ flex: 1 }} />
                                         {isInstalled ? (

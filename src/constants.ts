@@ -50,6 +50,21 @@ export const CATEGORY_COLORS_KEY = "pptb.categoryColors";
 /** GlobalState key prefix for persisted per-tool settings (suffixed with the tool id) */
 export const TOOL_SETTINGS_KEY_PREFIX = "pptb.toolSettings.";
 
+/** GlobalState key for the list of favorite (installed) tool IDs */
+export const FAVORITE_TOOLS_KEY = "pptb.favoriteTools";
+
+/** GlobalState key for the installed tools view's selected sort option */
+export const INSTALLED_TOOLS_SORT_KEY = "pptb.installedTools.sort";
+
+/** GlobalState key for the installed tools view's selected filter state */
+export const INSTALLED_TOOLS_FILTER_KEY = "pptb.installedTools.filter";
+
+/** GlobalState key for the marketplace view's selected sort option */
+export const MARKETPLACE_SORT_KEY = "pptb.marketplace.sort";
+
+/** GlobalState key for the marketplace view's selected filter state */
+export const MARKETPLACE_FILTER_KEY = "pptb.marketplace.filter";
+
 /** Default environment indicator colors (used when no custom environmentColor is set) */
 export const ENVIRONMENT_DEFAULT_COLORS: Record<string, string> = {
     Dev: "#2d883e",

@@ -35,53 +35,55 @@ How this extension compares to the [Power Platform ToolBox Desktop App](https://
 
 ### Installed Tools SidePanel
 
-| Feature                                               | VS Code Extension | Desktop App |
-| ----------------------------------------------------- | ----------------- | ----------- |
-| List installed tools in a sidebar/main list           | ✅                | ✅          |
-| Launch a tool in the context of the active connection | ✅                | ✅          |
-| Uninstall a tool                                      | ✅                | ✅          |
-| Refresh list                                          | ✅                | ✅          |
-| Verified badge, publisher/contributor tooltip         | ✅                | ✅          |
-| Category/capability tags shown on the list item       | ❌                | ✅          |
-| Download count / rating / active-user stats shown     | ❌                | ✅          |
-| Mark tool as favorite (star)                          | ❌                | ✅          |
-| Search box                                            | ❌                | ✅          |
-| Sort (name, popularity, rating, downloads, favorite)  | ❌                | ✅          |
-| Filter by category/tag                                | ❌                | ✅          |
+| Feature                                                 | VS Code Extension                  | Desktop App |
+| ------------------------------------------------------- | ---------------------------------- | ----------- |
+| List installed tools in a sidebar/main list             | ✅                                 | ✅          |
+| Launch a tool in the context of the active connection   | ✅                                 | ✅          |
+| Uninstall a tool                                        | ✅                                 | ✅          |
+| Refresh list                                            | ✅                                 | ✅          |
+| Verified badge, publisher/contributor, category tooltip | ✅                                 | ✅          |
+| Category/capability tags shown on the list item         | ⚠️ tooltip only                    | ✅          |
+| Download count / rating / active-user stats shown       | ⚠️ used for sorting, not displayed | ✅          |
+| Mark tool as favorite (star)                            | ✅                                 | ✅          |
+| Search box                                              | ❌                                 | ✅          |
+| Sort (name, popularity, rating, downloads, favorite)    | ✅                                 | ✅          |
+| Filter by category/verified-only                        | ✅                                 | ✅          |
 
 ### Marketplace SidePanel
 
-| Feature                                                 | VS Code Extension | Desktop App |
-| ------------------------------------------------------- | ----------------- | ----------- |
-| Browse marketplace tools in a sidebar/main list         | ✅                | ✅          |
-| Install a tool                                          | ✅                | ✅          |
-| Uninstall an installed marketplace tool                 | ✅                | ✅          |
-| Verified badge, publisher/contributor, category tooltip | ✅                | ✅          |
-| Refresh list                                            | ✅                | ✅          |
-| Category/capability tags shown on the list item         | ❌                | ✅          |
-| Download count / rating / active-user stats shown       | ❌                | ✅          |
-| Mark tool as favorite (star)                            | ❌                | ✅          |
-| Search box                                              | ❌                | ✅          |
-| Sort (name, popularity, rating, downloads, favorite)    | ❌                | ✅          |
-| Filter by category/tag                                  | ❌                | ✅          |
-| "New tools" highlight/notification                      | ❌                | ✅          |
+| Feature                                                 | VS Code Extension                  | Desktop App |
+| ------------------------------------------------------- | ---------------------------------- | ----------- |
+| Browse marketplace tools in a sidebar/main list         | ✅                                 | ✅          |
+| Install a tool                                          | ✅                                 | ✅          |
+| Uninstall an installed marketplace tool                 | ✅                                 | ✅          |
+| Verified badge, publisher/contributor, category tooltip | ✅                                 | ✅          |
+| Refresh list                                            | ✅                                 | ✅          |
+| Category/capability tags shown on the list item         | ⚠️ tooltip only                    | ✅          |
+| Download count / rating / active-user stats shown       | ⚠️ used for sorting, not displayed | ✅          |
+| Search box                                              | ❌                                 | ✅          |
+| Sort (name, popularity, rating, downloads)              | ✅                                 | ✅          |
+| Filter by category/verified-only                        | ✅                                 | ✅          |
+| "New tools" highlight/notification                      | ❌                                 | ✅          |
 
 ### Installed Tools Full View
 
-| Feature                                                       | VS Code Extension | Desktop App |
-| ------------------------------------------------------------- | ----------------- | ----------- |
-| Dedicated full-tab card-grid view of installed tools          | ✅                | ❌          |
-| Search installed tools                                        | ✅                | ❌          |
-| Tabbed switch between Installed/Marketplace in the same panel | ✅                | ❌          |
+| Feature                                                         | VS Code Extension | Desktop App |
+| --------------------------------------------------------------- | ----------------- | ----------- |
+| Dedicated full-tab card-grid view of installed tools            | ✅                | ❌          |
+| Search installed tools                                          | ✅                | ❌          |
+| Sort and filter installed tools (shares state with the sidebar) | ✅                | ❌          |
+| Mark tool as favorite (star)                                    | ✅                | ❌          |
+| Tabbed switch between Installed/Marketplace in the same panel   | ✅                | ❌          |
 
 ### Marketplace Full View
 
-| Feature                                          | VS Code Extension | Desktop App |
-| ------------------------------------------------ | ----------------- | ----------- |
-| Dedicated full-tab card-grid marketplace browser | ✅                | ❌          |
-| Search marketplace tools                         | ✅                | ❌          |
-| Category filter chips                            | ✅                | ❌          |
-| Paginated results                                | ✅                | ❌          |
+| Feature                                                | VS Code Extension | Desktop App |
+| ------------------------------------------------------ | ----------------- | ----------- |
+| Dedicated full-tab card-grid marketplace browser       | ✅                | ❌          |
+| Search marketplace tools                               | ✅                | ❌          |
+| Category filter chips                                  | ✅                | ❌          |
+| Sort marketplace tools (shares state with the sidebar) | ✅                | ❌          |
+| Paginated results                                      | ✅                | ❌          |
 
 ### Tool Updates
 
@@ -94,12 +96,12 @@ How this extension compares to the [Power Platform ToolBox Desktop App](https://
 
 ### Personalization & Home
 
-| Feature                                             | VS Code Extension | Desktop App |
-| --------------------------------------------------- | ----------------- | ----------- |
-| Mark tools as favorite                              | ❌                | ✅          |
-| Recently used tools list ("Open Recent")            | ❌                | ✅          |
-| Homepage dashboard (stats, quick actions, sponsors) | ❌                | ✅          |
-| "What's New" page shown after an update             | ❌                | ✅          |
+| Feature                                             | VS Code Extension           | Desktop App |
+| --------------------------------------------------- | --------------------------- | ----------- |
+| Mark tools as favorite                              | ✅ (no dedicated Home page) | ✅          |
+| Recently used tools list ("Open Recent")            | ❌                          | ✅          |
+| Homepage dashboard (stats, quick actions, sponsors) | ❌                          | ✅          |
+| "What's New" page shown after an update             | ❌                          | ✅          |
 
 ### Connection Management
 

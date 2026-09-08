@@ -6,8 +6,8 @@ import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { ToolHostPanel } from "../panels/toolHostPanel";
 import { ToolPanel } from "../panels/toolPanel";
-import { InstalledToolsTreeDataProvider, InstalledToolTreeItem } from "../providers/installedToolsTreeDataProvider";
-import { MarketplaceToolTreeItem, MarketplaceTreeDataProvider } from "../providers/marketplaceTreeDataProvider";
+import { InstalledToolsTreeDataProvider, InstalledToolTreeItem, type InstalledToolsSortOption } from "../providers/installedToolsTreeDataProvider";
+import { MarketplaceToolTreeItem, MarketplaceTreeDataProvider, type MarketplaceSortOption } from "../providers/marketplaceTreeDataProvider";
 
 export function registerToolCommands(
     context: vscode.ExtensionContext,
@@ -43,11 +43,17 @@ export function registerToolCommands(
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
-        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, iconCacheManager, "installed", { connectionsManager, dataverseManager });
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, "installed", {
+            connectionsManager,
+            dataverseManager,
+        });
     });
 
     const browseMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.browse", () => {
-        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, iconCacheManager, "marketplace", { connectionsManager, dataverseManager });
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, "marketplace", {
+            connectionsManager,
+            dataverseManager,
+        });
     });
 
     const marketplaceUninstallCmd = vscode.commands.registerCommand("pptb.marketplace.uninstall", async (item?: MarketplaceToolTreeItem) => {
@@ -86,5 +92,117 @@ export function registerToolCommands(
         }
     });
 
-    return [refreshInstalledCmd, uninstallToolCmd, refreshMarketplaceCmd, launchToolCmd, browseToolsCmd, browseMarketplaceCmd, marketplaceUninstallCmd, installToolCmd];
+    const addFavoriteCmd = vscode.commands.registerCommand("pptb.tools.addFavorite", async (item?: InstalledToolTreeItem) => {
+        if (!item?.tool) {
+            return;
+        }
+        await toolManager.toggleFavorite(item.tool.id);
+    });
+
+    const removeFavoriteCmd = vscode.commands.registerCommand("pptb.tools.removeFavorite", async (item?: InstalledToolTreeItem) => {
+        if (!item?.tool) {
+            return;
+        }
+        await toolManager.toggleFavorite(item.tool.id);
+    });
+
+    const sortAndFilterInstalledCmd = vscode.commands.registerCommand("pptb.tools.sortAndFilter", async () => {
+        const currentSort = installedToolsProvider.getSortOption();
+        const currentFilter = installedToolsProvider.getFilterState();
+
+        interface ActionPick extends vscode.QuickPickItem {
+            apply?: () => Thenable<void>;
+        }
+
+        const sortOptions: { label: string; value: InstalledToolsSortOption }[] = [
+            { label: "Favorite", value: "favorite" },
+            { label: "Name (A-Z)", value: "name-asc" },
+            { label: "Name (Z-A)", value: "name-desc" },
+            { label: "Popularity", value: "popularity" },
+            { label: "Highly Rated", value: "rating" },
+            { label: "Most Downloaded", value: "downloads" },
+            { label: "Verified", value: "verified" },
+        ];
+
+        const items: ActionPick[] = [
+            { label: "Sort", kind: vscode.QuickPickItemKind.Separator },
+            ...sortOptions.map((o) => ({
+                label: o.value === currentSort ? `$(check) ${o.label}` : o.label,
+                apply: () => installedToolsProvider.setSortOption(o.value),
+            })),
+            { label: "Filter", kind: vscode.QuickPickItemKind.Separator },
+            {
+                label: currentFilter.verifiedOnly ? "$(check) Verified Only" : "Verified Only",
+                apply: () => installedToolsProvider.setFilterState({ ...currentFilter, verifiedOnly: !currentFilter.verifiedOnly }),
+            },
+            {
+                label: !currentFilter.category ? "$(check) All Categories" : "All Categories",
+                apply: () => installedToolsProvider.setFilterState({ ...currentFilter, category: undefined }),
+            },
+            ...installedToolsProvider.getAvailableCategories().map((c) => ({
+                label: currentFilter.category === c ? `$(check) Category: ${c}` : `Category: ${c}`,
+                apply: () => installedToolsProvider.setFilterState({ ...currentFilter, category: c }),
+            })),
+        ];
+
+        const picked = await vscode.window.showQuickPick(items, { placeHolder: "Sort or filter installed tools…" });
+        await picked?.apply?.();
+    });
+
+    const sortAndFilterMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.sortAndFilter", async () => {
+        const currentSort = marketplaceProvider.getSortOption();
+        const currentFilter = marketplaceProvider.getFilterState();
+
+        interface ActionPick extends vscode.QuickPickItem {
+            apply?: () => Thenable<void>;
+        }
+
+        const sortOptions: { label: string; value: MarketplaceSortOption }[] = [
+            { label: "Name (A-Z)", value: "name-asc" },
+            { label: "Name (Z-A)", value: "name-desc" },
+            { label: "Popularity", value: "popularity" },
+            { label: "Highly Rated", value: "rating" },
+            { label: "Most Downloaded", value: "downloads" },
+            { label: "Verified", value: "verified" },
+        ];
+
+        const items: ActionPick[] = [
+            { label: "Sort", kind: vscode.QuickPickItemKind.Separator },
+            ...sortOptions.map((o) => ({
+                label: o.value === currentSort ? `$(check) ${o.label}` : o.label,
+                apply: () => marketplaceProvider.setSortOption(o.value),
+            })),
+            { label: "Filter", kind: vscode.QuickPickItemKind.Separator },
+            {
+                label: currentFilter.verifiedOnly ? "$(check) Verified Only" : "Verified Only",
+                apply: () => marketplaceProvider.setFilterState({ ...currentFilter, verifiedOnly: !currentFilter.verifiedOnly }),
+            },
+            {
+                label: !currentFilter.category ? "$(check) All Categories" : "All Categories",
+                apply: () => marketplaceProvider.setFilterState({ ...currentFilter, category: undefined }),
+            },
+            ...marketplaceProvider.getAvailableCategories().map((c) => ({
+                label: currentFilter.category === c ? `$(check) Category: ${c}` : `Category: ${c}`,
+                apply: () => marketplaceProvider.setFilterState({ ...currentFilter, category: c }),
+            })),
+        ];
+
+        const picked = await vscode.window.showQuickPick(items, { placeHolder: "Sort or filter marketplace tools…" });
+        await picked?.apply?.();
+    });
+
+    return [
+        refreshInstalledCmd,
+        uninstallToolCmd,
+        refreshMarketplaceCmd,
+        launchToolCmd,
+        browseToolsCmd,
+        browseMarketplaceCmd,
+        marketplaceUninstallCmd,
+        installToolCmd,
+        addFavoriteCmd,
+        removeFavoriteCmd,
+        sortAndFilterInstalledCmd,
+        sortAndFilterMarketplaceCmd,
+    ];
 }
