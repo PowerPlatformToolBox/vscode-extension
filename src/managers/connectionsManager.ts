@@ -31,10 +31,12 @@ export interface ConnectionPublicFields {
     powerPlatformTokenExpiry?: string;
     /** Marks a connection imported from file that is missing required credentials. */
     hasIncompleteCredentials?: boolean;
-    /** Browser to use for interactive auth (e.g. "Chrome", "Edge"). Undefined = system default. */
-    browser?: string;
-    /** Browser profile name to use for interactive auth. */
+    /** Browser to use for interactive auth. Undefined = system default. */
+    browser?: "chrome" | "edge";
+    /** Browser profile directory (e.g. "Default", "Profile 1") used for interactive auth. */
     browserProfile?: string;
+    /** Friendly display name of the selected browser profile (e.g. "Work"). */
+    browserProfileName?: string;
 }
 
 /**

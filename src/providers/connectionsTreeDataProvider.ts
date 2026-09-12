@@ -49,6 +49,11 @@ export class ConnectionTreeItem extends vscode.TreeItem {
                 this.iconPath = new vscode.ThemeIcon(isActive ? "circle-filled" : "circle-outline");
             }
             this.contextValue = isActive ? "pptb.connection.active" : "pptb.connection.inactive";
+            // Only offer "forget" when this connection actually has cached auth state to clear.
+            const hasCachedAuthState = Boolean(conn.msalAccountId || conn.tokenExpiry || conn.powerPlatformTokenExpiry);
+            if (hasCachedAuthState) {
+                this.contextValue += ".remembered";
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ import * as net from "net";
 import * as path from "path";
 import * as vscode from "vscode";
 import { AUTH_CACHE_FILE, AUTH_TYPES, AUTHORITY_BASE, COMMON_TENANT, POWER_PLATFORM_CLIENT_ID } from "../constants";
+import { BrowserManager } from "./browserManager";
 import type { Connection } from "./connectionsManager";
 
 /**
@@ -176,9 +177,11 @@ function getAvailablePort(): Promise<number> {
  */
 export class AuthManager implements vscode.Disposable {
     private readonly cacheFilePath: string;
+    private readonly browserManager: BrowserManager;
 
-    constructor(context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext, browserManager: BrowserManager = new BrowserManager()) {
         this.cacheFilePath = path.join(context.globalStorageUri.fsPath, AUTH_CACHE_FILE);
+        this.browserManager = browserManager;
     }
 
     /**
@@ -314,7 +317,7 @@ export class AuthManager implements vscode.Disposable {
             });
 
             server.listen(port, "127.0.0.1", () => {
-                vscode.env.openExternal(vscode.Uri.parse(authUrl)).then(
+                this.browserManager.openBrowserWithProfile(authUrl, connection).then(
                     () => {
                         /* opened */
                     },

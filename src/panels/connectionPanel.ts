@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { BrowserManager } from "../managers/browserManager";
 import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
 import { getNonce } from "../utils/webview";
 
@@ -11,12 +12,14 @@ export class ConnectionPanel {
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
     private readonly connectionsManager: ConnectionsManager;
+    private readonly browserManager: BrowserManager;
     private disposables: vscode.Disposable[] = [];
 
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
         connectionsManager: ConnectionsManager,
+        browserManager: BrowserManager,
         connection: Connection | undefined,
         categories: string[],
         categoryColors: Record<string, string>,
@@ -24,13 +27,14 @@ export class ConnectionPanel {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.connectionsManager = connectionsManager;
+        this.browserManager = browserManager;
 
         this.panel.webview.html = this.getHtmlForWebview(this.panel.webview);
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
         this.panel.webview.onDidReceiveMessage(
-            (message: { type: string; connection?: Connection; category?: string }) => {
+            (message: { type: string; connection?: Connection; category?: string; requestId?: string; browser?: string }) => {
                 this.handleMessage(message);
             },
             null,
@@ -54,7 +58,7 @@ export class ConnectionPanel {
      * Pass undefined for a new connection, or a Connection object to edit.
      * Secrets are loaded from SecretStorage so the form is fully pre-populated.
      */
-    static async open(extensionUri: vscode.Uri, connectionsManager: ConnectionsManager, connection?: Connection): Promise<void> {
+    static async open(extensionUri: vscode.Uri, connectionsManager: ConnectionsManager, browserManager: BrowserManager, connection?: Connection): Promise<void> {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
 
         // Load full connection with secrets for editing
@@ -82,7 +86,7 @@ export class ConnectionPanel {
             retainContextWhenHidden: true,
         });
 
-        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, connectionsManager, connectionWithSecrets, categories, categoryColors);
+        ConnectionPanel.currentPanel = new ConnectionPanel(panel, extensionUri, connectionsManager, browserManager, connectionWithSecrets, categories, categoryColors);
     }
 
     dispose(): void {
@@ -98,7 +102,7 @@ export class ConnectionPanel {
     // Message handling
     // ---------------------------------------------------------------------------
 
-    private handleMessage(message: { type: string; connection?: Connection; category?: string }): void {
+    private handleMessage(message: { type: string; connection?: Connection; category?: string; requestId?: string; browser?: string }): void {
         switch (message.type) {
             case "pptb:save":
                 if (message.connection) {
@@ -109,6 +113,22 @@ export class ConnectionPanel {
                 if (message.connection) {
                     void this.handleTest(message.connection);
                 }
+                break;
+            case "pptb:checkBrowserInstalled":
+                this.panel.webview.postMessage({
+                    type: "pptb:browserInstalledResult",
+                    requestId: message.requestId,
+                    browser: message.browser,
+                    installed: this.browserManager.isBrowserInstalled(message.browser),
+                });
+                break;
+            case "pptb:getBrowserProfiles":
+                this.panel.webview.postMessage({
+                    type: "pptb:browserProfilesResult",
+                    requestId: message.requestId,
+                    browser: message.browser,
+                    profiles: this.browserManager.getBrowserProfiles(message.browser),
+                });
                 break;
             case "pptb:cancel":
                 this.dispose();

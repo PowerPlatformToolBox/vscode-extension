@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { AuthManager } from "./managers/authManager";
+import { BrowserManager } from "./managers/browserManager";
 import { ConnectionsManager } from "./managers/connectionsManager";
 import { DataverseManager } from "./managers/dataverseManager";
 import { IconCacheManager } from "./managers/iconCacheManager";
@@ -16,7 +17,8 @@ import { logger } from "./utils/logger";
 
 export function activate(context: vscode.ExtensionContext): void {
     // ── Bootstrap managers ────────────────────────────────────────────────────
-    const authManager = new AuthManager(context);
+    const browserManager = new BrowserManager();
+    const authManager = new AuthManager(context, browserManager);
     const connectionsManager = new ConnectionsManager(context);
     const dataverseManager = new DataverseManager(authManager);
 
@@ -62,7 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
         toolManager,
         iconCacheManager,
         statusBar,
-        ...registerConnectionCommands(context, authManager, connectionsManager, treeDataProvider),
+        ...registerConnectionCommands(context, authManager, connectionsManager, treeDataProvider, browserManager),
         ...registerSupportCommands(),
         ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider, iconCacheManager),
     );

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../managers/authManager";
+import { BrowserManager } from "../managers/browserManager";
 import { ConnectionsManager } from "../managers/connectionsManager";
 import { ConnectionPanel } from "../panels/connectionPanel";
 import { ConnectionsTreeDataProvider, ConnectionTreeItem } from "../providers/connectionsTreeDataProvider";
@@ -9,9 +10,10 @@ export function registerConnectionCommands(
     authManager: AuthManager,
     connectionsManager: ConnectionsManager,
     treeDataProvider: ConnectionsTreeDataProvider,
+    browserManager: BrowserManager,
 ): vscode.Disposable[] {
     const addCmd = vscode.commands.registerCommand("pptb.connections.add", async () => {
-        await ConnectionPanel.open(context.extensionUri, connectionsManager, undefined);
+        await ConnectionPanel.open(context.extensionUri, connectionsManager, browserManager, undefined);
     });
 
     const editCmd = vscode.commands.registerCommand("pptb.connections.edit", async (treeItem?: ConnectionTreeItem) => {
@@ -20,7 +22,7 @@ export function registerConnectionCommands(
             vscode.window.showWarningMessage("No connection selected to edit.");
             return;
         }
-        await ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
+        await ConnectionPanel.open(context.extensionUri, connectionsManager, browserManager, connection);
     });
 
     const deleteCmd = vscode.commands.registerCommand("pptb.connections.delete", async (treeItem?: ConnectionTreeItem) => {
@@ -123,7 +125,7 @@ export function registerConnectionCommands(
             vscode.window.showWarningMessage("No connection selected.");
             return;
         }
-        await ConnectionPanel.open(context.extensionUri, connectionsManager, connection);
+        await ConnectionPanel.open(context.extensionUri, connectionsManager, browserManager, connection);
     });
 
     const forgetCmd = vscode.commands.registerCommand("pptb.connections.forget", async (treeItem?: ConnectionTreeItem) => {

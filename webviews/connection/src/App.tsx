@@ -3,6 +3,12 @@ import React, { useEffect, useState } from "react";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type AuthType = "InteractiveBrowser" | "ClientCredentials" | "UsernamePassword";
+export type BrowserType = "chrome" | "edge";
+
+export interface BrowserProfile {
+    name: string;
+    path: string;
+}
 
 export interface Connection {
     id: string;
@@ -19,8 +25,9 @@ export interface Connection {
     environmentColor?: string;
     categoryColor?: string;
     enabledForPowerPlatformAPI?: boolean;
-    browser?: string;
+    browser?: BrowserType;
     browserProfile?: string;
+    browserProfileName?: string;
     createdAt?: string;
     lastUsedAt?: string;
 }
@@ -37,6 +44,10 @@ function generateId(): string {
     return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 }
 
+function generateRequestId(): string {
+    return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const AUTH_OPTIONS: { value: AuthType; label: string }[] = [
@@ -47,7 +58,11 @@ const AUTH_OPTIONS: { value: AuthType; label: string }[] = [
 
 const ENVIRONMENTS: Connection["environment"][] = ["Dev", "Test", "UAT", "Production"];
 
-const BROWSERS = ["System Default", "Chrome", "Firefox", "Edge", "Safari"];
+const BROWSER_OPTIONS: { value: BrowserType | ""; label: string }[] = [
+    { value: "", label: "System Default" },
+    { value: "chrome", label: "Google Chrome" },
+    { value: "edge", label: "Microsoft Edge" },
+];
 
 const ENV_DEFAULT_COLORS: Record<Connection["environment"], string> = {
     Dev: "#2d883e",
@@ -168,6 +183,11 @@ export default function App(): React.ReactElement {
     });
     const [isEditing, setIsEditing] = useState(false);
 
+    // Browser profile state
+    const [browserProfiles, setBrowserProfiles] = useState<BrowserProfile[]>([]);
+    const [browserProfilesLoading, setBrowserProfilesLoading] = useState(false);
+    const [browserNotInstalled, setBrowserNotInstalled] = useState(false);
+
     // Category state
     const [localCategories, setLocalCategories] = useState<string[]>([]);
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>({});
@@ -181,6 +201,9 @@ export default function App(): React.ReactElement {
                 connection?: Connection;
                 categories?: string[];
                 categoryColors?: Record<string, string>;
+                browser?: BrowserType | "";
+                installed?: boolean;
+                profiles?: BrowserProfile[];
             }>,
         ) => {
             if (event.data.type === "pptb:init") {
@@ -194,11 +217,31 @@ export default function App(): React.ReactElement {
                     setConn(event.data.connection);
                     setIsEditing(true);
                 }
+            } else if (event.data.type === "pptb:browserInstalledResult") {
+                setBrowserNotInstalled(event.data.installed === false);
+            } else if (event.data.type === "pptb:browserProfilesResult") {
+                setBrowserProfiles(event.data.profiles ?? []);
+                setBrowserProfilesLoading(false);
             }
         };
         window.addEventListener("message", handler);
         return () => window.removeEventListener("message", handler);
     }, []);
+
+    // Reload profiles whenever the selected browser changes.
+    useEffect(() => {
+        if (!conn.browser) {
+            setBrowserProfiles([]);
+            setBrowserNotInstalled(false);
+            setBrowserProfilesLoading(false);
+            return;
+        }
+        setBrowserProfilesLoading(true);
+        setBrowserNotInstalled(false);
+        vscodeApi.postMessage({ type: "pptb:checkBrowserInstalled", browser: conn.browser, requestId: generateRequestId() });
+        vscodeApi.postMessage({ type: "pptb:getBrowserProfiles", browser: conn.browser, requestId: generateRequestId() });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conn.browser]);
 
     const update = (patch: Partial<Connection>) => setConn((prev) => ({ ...prev, ...patch }));
 
@@ -553,22 +596,63 @@ export default function App(): React.ReactElement {
                         <Field label="Browser" hint="Choose which browser to use when opening URLs with authentication. Defaults to your system's default browser.">
                             <select
                                 style={selectStyle}
-                                value={conn.browser ?? "System Default"}
-                                onChange={(e) =>
+                                value={conn.browser ?? ""}
+                                onChange={(e) => {
+                                    const value = e.target.value as BrowserType | "";
                                     update({
-                                        browser: e.target.value === "System Default" ? undefined : e.target.value,
-                                    })
-                                }
+                                        browser: value === "" ? undefined : value,
+                                        browserProfile: undefined,
+                                        browserProfileName: undefined,
+                                    });
+                                }}
                             >
-                                {BROWSERS.map((b) => (
-                                    <option key={b} value={b}>
-                                        {b}
+                                {BROWSER_OPTIONS.map((b) => (
+                                    <option key={b.value || "default"} value={b.value}>
+                                        {b.label}
                                     </option>
                                 ))}
                             </select>
                         </Field>
-                        <Field label="Browser Profile" style={{ marginBottom: 0 }}>
-                            <input style={inputStyle} type="text" value={conn.browserProfile ?? ""} placeholder="Default" onChange={(e) => update({ browserProfile: e.target.value || undefined })} />
+                        {conn.browser && browserNotInstalled && (
+                            <div
+                                style={{
+                                    ...hintCss,
+                                    color: "var(--vscode-inputValidation-warningForeground, #cca700)",
+                                    marginBottom: 8,
+                                }}
+                            >
+                                ⚠️ Selected browser is not installed. URLs will open using the system default browser.
+                            </div>
+                        )}
+                        <Field label="Browser Profile" hint="Select a browser profile to sign in with." style={{ marginBottom: 0 }}>
+                            <select
+                                style={selectStyle}
+                                value={conn.browserProfile ?? ""}
+                                disabled={!conn.browser || browserNotInstalled || browserProfilesLoading || browserProfiles.length === 0}
+                                onChange={(e) => {
+                                    const selectedPath = e.target.value;
+                                    const selected = browserProfiles.find((p) => p.path === selectedPath);
+                                    update({
+                                        browserProfile: selectedPath || undefined,
+                                        browserProfileName: selected?.name,
+                                    });
+                                }}
+                            >
+                                {!conn.browser && <option value="">No profile needed</option>}
+                                {conn.browser && browserProfilesLoading && <option value="">Loading profiles…</option>}
+                                {conn.browser && !browserProfilesLoading && browserNotInstalled && <option value="">Browser not installed</option>}
+                                {conn.browser && !browserProfilesLoading && !browserNotInstalled && browserProfiles.length === 0 && <option value="">No profiles found</option>}
+                                {conn.browser && !browserProfilesLoading && !browserNotInstalled && browserProfiles.length > 0 && (
+                                    <>
+                                        <option value="">Use default profile</option>
+                                        {browserProfiles.map((p) => (
+                                            <option key={p.path} value={p.path}>
+                                                {p.name}
+                                            </option>
+                                        ))}
+                                    </>
+                                )}
+                            </select>
                         </Field>
                     </div>
 

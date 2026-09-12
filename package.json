@@ -175,7 +175,7 @@
         "command": "pptb.connections.showDetails",
         "title": "%command.connections.showDetails.title%",
         "category": "%command.category%",
-        "icon": "$(info)"
+        "icon": "$(edit)"
       },
       {
         "command": "pptb.connections.forget",
@@ -328,42 +328,42 @@
       "view/item/context": [
         {
           "command": "pptb.connections.connect",
-          "when": "view == pptb.connectionsView && viewItem == pptb.connection.inactive",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
           "group": "inline@1"
         },
         {
           "command": "pptb.connections.disconnect",
-          "when": "view == pptb.connectionsView && viewItem == pptb.connection.active",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.active/",
           "group": "inline@1"
         },
         {
           "command": "pptb.connections.delete",
-          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
           "group": "inline@2"
         },
         {
           "command": "pptb.connections.connect",
-          "when": "view == pptb.connectionsView && viewItem == pptb.connection.inactive",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
           "group": "1_connection@1"
         },
         {
           "command": "pptb.connections.openEnvironment",
-          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
           "group": "2_manage@1"
         },
         {
           "command": "pptb.connections.showDetails",
-          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
           "group": "2_manage@2"
         },
         {
           "command": "pptb.connections.forget",
-          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)\\.remembered$/",
           "group": "2_manage@3"
         },
         {
           "command": "pptb.connections.delete",
-          "when": "view == pptb.connectionsView && (viewItem == pptb.connection.active || viewItem == pptb.connection.inactive)",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
           "group": "3_delete@1"
         },
         {
