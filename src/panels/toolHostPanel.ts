@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { ConnectionsManager } from "../managers/connectionsManager";
+import type { CspConsentManager } from "../managers/cspConsentManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
@@ -34,6 +35,7 @@ export class ToolHostPanel {
     private readonly installedToolsProvider: InstalledToolsTreeDataProvider;
     private readonly marketplaceProvider: MarketplaceTreeDataProvider;
     private readonly iconCacheManager: IconCacheManager;
+    private readonly cspConsentManager: CspConsentManager;
     private readonly managers?: OpenManagers;
     private disposables: vscode.Disposable[] = [];
     private lastMarketplaceSearch: string | undefined;
@@ -47,6 +49,7 @@ export class ToolHostPanel {
         installedToolsProvider: InstalledToolsTreeDataProvider,
         marketplaceProvider: MarketplaceTreeDataProvider,
         iconCacheManager: IconCacheManager,
+        cspConsentManager: CspConsentManager,
         initialView: ToolHostView,
         managers?: OpenManagers,
     ) {
@@ -58,6 +61,7 @@ export class ToolHostPanel {
         this.installedToolsProvider = installedToolsProvider;
         this.marketplaceProvider = marketplaceProvider;
         this.iconCacheManager = iconCacheManager;
+        this.cspConsentManager = cspConsentManager;
         this.managers = managers;
 
         this.panel.webview.html = this.getHtmlForWebview(this.panel.webview, initialView);
@@ -100,6 +104,7 @@ export class ToolHostPanel {
         installedToolsProvider: InstalledToolsTreeDataProvider,
         marketplaceProvider: MarketplaceTreeDataProvider,
         iconCacheManager: IconCacheManager,
+        cspConsentManager: CspConsentManager,
         initialView: ToolHostView = "installed",
         managers?: OpenManagers,
     ): void {
@@ -127,6 +132,7 @@ export class ToolHostPanel {
             installedToolsProvider,
             marketplaceProvider,
             iconCacheManager,
+            cspConsentManager,
             initialView,
             managers,
         );
@@ -178,7 +184,7 @@ export class ToolHostPanel {
             case "launch-tool": {
                 const toolId = message.toolId;
                 if (toolId) {
-                    ToolPanel.open(this.extensionUri, this.context, toolId, this.toolManager, this.toolRegistryManager, this.managers);
+                    ToolPanel.open(this.extensionUri, this.context, toolId, this.toolManager, this.toolRegistryManager, this.cspConsentManager, this.managers);
                 }
                 break;
             }

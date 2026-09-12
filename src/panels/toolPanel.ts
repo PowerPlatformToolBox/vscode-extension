@@ -4,11 +4,13 @@ import { v4 as uuidv4 } from "uuid";
 import * as vscode from "vscode";
 import { TOOL_SETTINGS_KEY_PREFIX } from "../constants";
 import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
+import { CspConsentManager } from "../managers/cspConsentManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
 import { TerminalManager } from "../managers/terminalManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
+import { buildToolCsp, type CspExceptions } from "../utils/csp";
 import { logger } from "../utils/logger";
 
 type ApiMessage = {
@@ -148,8 +150,16 @@ export class ToolPanel {
      * Validates the active connection and prompts for a secondary connection when
      * the tool's package.json declares `features.multiConnection`.
      */
-    static open(extensionUri: vscode.Uri, context: vscode.ExtensionContext, toolId: string, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, managers?: OpenManagers): void {
-        ToolPanel.openAsync(extensionUri, context, toolId, toolManager, toolRegistryManager, managers).catch((err: unknown) => {
+    static open(
+        extensionUri: vscode.Uri,
+        context: vscode.ExtensionContext,
+        toolId: string,
+        toolManager: ToolManager,
+        toolRegistryManager: ToolRegistryManager,
+        cspConsentManager: CspConsentManager,
+        managers?: OpenManagers,
+    ): void {
+        ToolPanel.openAsync(extensionUri, context, toolId, toolManager, toolRegistryManager, cspConsentManager, managers).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error("ToolPanel.open error:", msg);
         });
@@ -161,6 +171,7 @@ export class ToolPanel {
         toolId: string,
         toolManager: ToolManager,
         toolRegistryManager: ToolRegistryManager,
+        cspConsentManager: CspConsentManager,
         managers?: OpenManagers,
     ): Promise<void> {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
@@ -169,6 +180,14 @@ export class ToolPanel {
         if (existing) {
             existing.panel.reveal(column ?? vscode.ViewColumn.One);
             return;
+        }
+
+        const tool = toolManager.getById(toolId);
+        if (tool?.cspExceptions) {
+            const consented = await cspConsentManager.ensureConsent(toolId, tool.name, tool.cspExceptions);
+            if (!consented) {
+                return;
+            }
         }
 
         // Validate primary connection before launching
@@ -183,7 +202,6 @@ export class ToolPanel {
             }
 
             // Determine secondary connection requirement from the tool manifest
-            const tool = toolManager.getById(toolId);
             let secondaryConnectionId: string | null = null;
             let secondaryConnectionUrl: string | null = null;
 
@@ -224,7 +242,6 @@ export class ToolPanel {
         }
 
         // No connection manager present — launch directly
-        const tool = toolManager.getById(toolId);
         const title = tool ? `PPTB Tool — ${tool.name}` : "PPTB Tool";
 
         const toolPathUri = vscode.Uri.file(toolManager.getToolPath(toolId));
@@ -341,7 +358,7 @@ export class ToolPanel {
         }
     }
 
-    private loadToolHtml(tool: { toolPath: string; executableRelativePath?: string; name: string }): string | null {
+    private loadToolHtml(tool: { toolPath: string; executableRelativePath?: string; name: string; cspExceptions?: CspExceptions }): string | null {
         const candidates: string[] = [];
         if (tool.executableRelativePath) {
             candidates.push(path.join(tool.toolPath, tool.executableRelativePath));
@@ -377,14 +394,7 @@ export class ToolPanel {
                 html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, "");
 
                 const cspSource = this.panel.webview.cspSource;
-                const csp = [
-                    `default-src 'none'`,
-                    `script-src ${cspSource} 'unsafe-inline'`,
-                    `style-src ${cspSource} 'unsafe-inline'`,
-                    `img-src ${cspSource} https: data: blob:`,
-                    `font-src ${cspSource} https: data:`,
-                    `connect-src ${cspSource} https:`,
-                ].join("; ");
+                const csp = buildToolCsp(cspSource, tool.cspExceptions);
 
                 const injection = `<meta http-equiv="Content-Security-Policy" content="${csp}">\n` + `<base href="${baseUri}/">\n` + `<script>\n${polyfillContent}\n</script>`;
 

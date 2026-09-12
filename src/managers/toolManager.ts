@@ -5,6 +5,7 @@ import * as https from "https";
 import * as path from "path";
 import * as vscode from "vscode";
 import { FAVORITE_TOOLS_KEY } from "../constants";
+import { normalizeCspExceptions, type CspExceptions } from "../utils/csp";
 import { logger } from "../utils/logger";
 import { parseContributorsFromRecord, parseVerifiedFromRecord, str } from "./toolRegistryManager";
 
@@ -39,6 +40,8 @@ export interface Tool {
     executableRelativePath?: string;
     /** Category groupings for this tool (e.g. "CLI", "DevOps"). */
     categories?: string[];
+    /** Declared CSP exceptions requiring user consent before being applied to the tool's webview. */
+    cspExceptions?: CspExceptions;
 }
 
 /**
@@ -194,6 +197,7 @@ export class ToolManager implements vscode.Disposable {
             description: (pkg && str(pkg["description"])) ?? tool.description,
             version: (pkg && str(pkg["version"])) ?? tool.version,
             categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
+            cspExceptions: normalizeCspExceptions(pkg?.["cspExceptions"]) ?? tool.cspExceptions,
         };
     }
 

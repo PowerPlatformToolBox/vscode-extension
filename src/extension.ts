@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { AuthManager } from "./managers/authManager";
 import { BrowserManager } from "./managers/browserManager";
 import { ConnectionsManager } from "./managers/connectionsManager";
+import { CspConsentManager } from "./managers/cspConsentManager";
 import { DataverseManager } from "./managers/dataverseManager";
 import { IconCacheManager } from "./managers/iconCacheManager";
 import { ToolManager } from "./managers/toolManager";
@@ -31,6 +32,7 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(registryOutput);
     const toolRegistryManager = new ToolRegistryManager(registryOutput);
     const iconCacheManager = new IconCacheManager(context);
+    const cspConsentManager = new CspConsentManager(context);
 
     // ── Tree views ────────────────────────────────────────────────────────────
     const treeDataProvider = new ConnectionsTreeDataProvider(connectionsManager, iconCacheManager);
@@ -66,7 +68,7 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar,
         ...registerConnectionCommands(context, authManager, connectionsManager, treeDataProvider, browserManager),
         ...registerSupportCommands(),
-        ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider, iconCacheManager),
+        ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager),
     );
 
     // ── Warm up icon cache in background ─────────────────────────────────────

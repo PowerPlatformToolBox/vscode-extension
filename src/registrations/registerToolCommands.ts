@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import { ConnectionsManager } from "../managers/connectionsManager";
+import { CspConsentManager } from "../managers/cspConsentManager";
 import { DataverseManager } from "../managers/dataverseManager";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
+import { CspPermissionsPanel } from "../panels/cspPermissionsPanel";
 import { ToolHostPanel } from "../panels/toolHostPanel";
 import { ToolPanel } from "../panels/toolPanel";
 import { InstalledToolsTreeDataProvider, InstalledToolTreeItem, type InstalledToolsSortOption } from "../providers/installedToolsTreeDataProvider";
@@ -18,6 +20,7 @@ export function registerToolCommands(
     installedToolsProvider: InstalledToolsTreeDataProvider,
     marketplaceProvider: MarketplaceTreeDataProvider,
     iconCacheManager: IconCacheManager,
+    cspConsentManager: CspConsentManager,
 ): vscode.Disposable[] {
     const refreshInstalledCmd = vscode.commands.registerCommand("pptb.tools.refresh", () => installedToolsProvider.refresh());
 
@@ -39,18 +42,35 @@ export function registerToolCommands(
         if (!item?.tool.id) {
             return;
         }
-        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, { connectionsManager, dataverseManager });
+        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, { connectionsManager, dataverseManager });
+    });
+
+    const revokeCspConsentCmd = vscode.commands.registerCommand("pptb.tools.revokeCspConsent", async (item?: InstalledToolTreeItem) => {
+        if (!item?.tool) {
+            vscode.window.showWarningMessage("No tool selected.");
+            return;
+        }
+        if (!cspConsentManager.hasStoredConsent(item.tool.id)) {
+            vscode.window.showInformationMessage(`"${item.tool.name}" has no granted CSP permissions to revoke.`);
+            return;
+        }
+        await cspConsentManager.revoke(item.tool.id);
+        vscode.window.showInformationMessage(`CSP consent revoked for "${item.tool.name}". You'll be prompted again the next time it's launched.`);
+    });
+
+    const managePermissionsCmd = vscode.commands.registerCommand("pptb.tools.managePermissions", () => {
+        CspPermissionsPanel.open(context.extensionUri, toolManager, cspConsentManager, iconCacheManager);
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
-        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, "installed", {
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "installed", {
             connectionsManager,
             dataverseManager,
         });
     });
 
     const browseMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.browse", () => {
-        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, "marketplace", {
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "marketplace", {
             connectionsManager,
             dataverseManager,
         });
@@ -196,6 +216,8 @@ export function registerToolCommands(
         uninstallToolCmd,
         refreshMarketplaceCmd,
         launchToolCmd,
+        revokeCspConsentCmd,
+        managePermissionsCmd,
         browseToolsCmd,
         browseMarketplaceCmd,
         marketplaceUninstallCmd,

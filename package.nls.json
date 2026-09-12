@@ -23,6 +23,8 @@
     "command.tools.addFavorite.title": "Mark as Favorite",
     "command.tools.removeFavorite.title": "Remove from Favorites",
     "command.tools.uninstall.title": "Uninstall Tool",
+    "command.tools.revokeCspConsent.title": "Revoke CSP Consent",
+    "command.tools.managePermissions.title": "Review CSP Permissions",
     "command.tools.launch.title": "Launch Tool",
     "command.tools.browse.title": "Browse Installed Tools",
     "command.marketplace.refresh.title": "Refresh Marketplace",

@@ -138,9 +138,9 @@ How this extension compares to the [Power Platform ToolBox Desktop App](https://
 
 | Feature                                            | VS Code Extension | Desktop App |
 | -------------------------------------------------- | ----------------- | ----------- |
-| Per-tool webview CSP enforcement                   | ✅ (fixed policy) | ✅          |
-| User-consent workflow for external resource access | ❌                | ✅          |
-| Configurable CSP per tool                          | ❌                | ✅          |
+| Per-tool webview CSP enforcement                   | ✅                | ✅          |
+| User-consent workflow for external resource access | ✅                | ✅          |
+| Configurable CSP per tool                          | ✅                | ✅          |
 
 ### Agentic AI
 
