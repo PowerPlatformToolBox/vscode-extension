@@ -18,18 +18,43 @@ export interface InstalledToolsFilterState {
 const DEFAULT_SORT: InstalledToolsSortOption = "name-asc";
 const DEFAULT_FILTER: InstalledToolsFilterState = {};
 
+/** Parse a version string into numeric [major, minor, patch, ...] segments; non-numeric segments count as 0. */
+function parseVersionParts(version: string): number[] {
+    const cleaned = version.trim().replace(/^v/i, "").split(/[-+]/)[0];
+    return cleaned.split(".").map((part) => {
+        const n = parseInt(part, 10);
+        return Number.isFinite(n) ? n : 0;
+    });
+}
+
+/** Return `true` when `latest` is a strictly newer version than `current` (segment-by-segment numeric compare). */
+function isNewerVersion(current: string, latest: string): boolean {
+    const currentParts = parseVersionParts(current);
+    const latestParts = parseVersionParts(latest);
+    const len = Math.max(currentParts.length, latestParts.length);
+    for (let i = 0; i < len; i++) {
+        const diff = (latestParts[i] ?? 0) - (currentParts[i] ?? 0);
+        if (diff !== 0) {
+            return diff > 0;
+        }
+    }
+    return false;
+}
+
 export class InstalledToolTreeItem extends vscode.TreeItem {
     readonly tool: InstalledTool;
 
-    constructor(tool: InstalledTool, isFavorite: boolean, iconCacheManager: IconCacheManager) {
+    constructor(tool: InstalledTool, isFavorite: boolean, updateInfo: { hasUpdate: boolean; latestVersion?: string; isUpdating: boolean }, iconCacheManager: IconCacheManager) {
         const isVerified = Boolean(tool.isVerified);
+        const { hasUpdate, latestVersion, isUpdating } = updateInfo;
         // TreeItem labels render as plain text, so Unicode glyphs are used instead of codicons ($(...) is not interpreted here).
-        const label = [tool.name, isFavorite ? "\u2605" : undefined, isVerified ? "\u2713" : undefined].filter(Boolean).join(" ");
+        const label = [tool.name, isFavorite ? "\u2605" : undefined, isVerified ? "\u2713" : undefined, hasUpdate ? "\u2191" : undefined].filter(Boolean).join(" ");
         super(label, vscode.TreeItemCollapsibleState.None);
         this.tool = tool;
 
         const contributors = formatContributors(tool.contributors) || tool.publisher;
-        this.description = [contributors, tool.version ? `v${tool.version}` : undefined].filter(Boolean).join(" · ");
+        const versionSuffix = isUpdating ? "updating\u2026" : hasUpdate ? `v${tool.version} \u2192 v${latestVersion}` : tool.version ? `v${tool.version}` : undefined;
+        this.description = [contributors, versionSuffix].filter(Boolean).join(" · ");
 
         const tooltip = new vscode.MarkdownString();
         tooltip.supportThemeIcons = true;
@@ -44,6 +69,11 @@ export class InstalledToolTreeItem extends vscode.TreeItem {
             tooltip.appendMarkdown(`**Category:** ${tool.categories.join(", ")}\n\n`);
         }
         tooltip.appendMarkdown(`**Version:** ${tool.version}\n\n`);
+        if (isUpdating) {
+            tooltip.appendMarkdown(`$(sync~spin) *Updating\u2026*\n\n`);
+        } else if (hasUpdate) {
+            tooltip.appendMarkdown(`$(arrow-up) **Update available:** v${latestVersion}\n\n`);
+        }
         if (tool.description) {
             tooltip.appendMarkdown(`${tool.description}`);
         }
@@ -51,7 +81,8 @@ export class InstalledToolTreeItem extends vscode.TreeItem {
         this.tooltip = tooltip;
 
         this.iconPath = iconCacheManager.getLocalUri(tool.icon) ?? new vscode.ThemeIcon("package");
-        this.contextValue = isFavorite ? "pptb.installedTool.favorite" : "pptb.installedTool";
+        // contextValue segments: base, optional ".favorite", optional ".updateAvailable" (in this order).
+        this.contextValue = ["pptb.installedTool", isFavorite ? "favorite" : undefined, hasUpdate ? "updateAvailable" : undefined].filter(Boolean).join(".");
     }
 }
 
@@ -76,6 +107,10 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<A
     /** Cached downloads/rating/MAU analytics per tool ID, refreshed in the background. */
     private analytics = new Map<string, ToolAnalytics>();
     private analyticsFetchedForIds = "";
+
+    /** Cached registry versions per tool ID, used to detect available updates (mirrors the desktop app's checkForUpdates). */
+    private latestVersions = new Map<string, string>();
+    private updatesFetchedForIds = "";
 
     constructor(context: vscode.ExtensionContext, toolManager: ToolManager, toolRegistryManager: ToolRegistryManager, iconCacheManager: IconCacheManager) {
         this.context = context;
@@ -149,6 +184,59 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<A
             });
     }
 
+    /** Kick off a background update-check refresh for the given tool IDs (fire-and-forget; refreshes the tree on completion). */
+    private refreshUpdates(toolIds: string[]): void {
+        const key = [...toolIds].sort().join(",");
+        if (toolIds.length === 0 || key === this.updatesFetchedForIds) {
+            return;
+        }
+        this.updatesFetchedForIds = key;
+        this.toolRegistryManager
+            .getLatestVersions(toolIds)
+            .then((map) => {
+                this.latestVersions = map;
+                void vscode.commands.executeCommand("setContext", "pptb.hasToolUpdates", this.getToolsWithUpdates().length > 0);
+                this._onDidChangeTreeData.fire();
+            })
+            .catch(() => {
+                /* update checks are best-effort; ignore failures */
+            });
+    }
+
+    /**
+     * Force the next render to re-fetch registry versions, instead of relying on the
+     * installed-tool-ID cache key (which doesn't change across an update/re-install).
+     * Call this right after a tool finishes updating so the tree can't get stuck showing
+     * a stale "update available" state.
+     */
+    invalidateUpdateCache(): void {
+        this.updatesFetchedForIds = "";
+        this._onDidChangeTreeData.fire();
+    }
+
+    /**
+     * Return `true` when the registry has a version of `tool` that is strictly newer than
+     * what's installed. Uses a numeric segment-by-segment comparison (not a plain string
+     * inequality) so a registry entry that is equal to, or older than (e.g. stale/out-of-sync
+     * publisher metadata), the installed version never gets flagged as an update — which would
+     * otherwise send tools into an endless "update available" loop that re-installs the same
+     * (or an older) version every time.
+     */
+    hasUpdate(tool: InstalledTool): boolean {
+        const latest = this.latestVersions.get(tool.id);
+        return latest !== undefined && isNewerVersion(tool.version, latest);
+    }
+
+    /** Return the latest registry version known for a tool, if any. */
+    getLatestVersion(id: string): string | undefined {
+        return this.latestVersions.get(id);
+    }
+
+    /** Return every installed tool that currently has an update available. */
+    getToolsWithUpdates(): InstalledTool[] {
+        return this.toolManager.getAll().filter((t) => this.hasUpdate(t));
+    }
+
     /**
      * Apply the current persisted filter and sort settings to a list of installed tools.
      * Shared by the tree view (`getChildren`) and the ToolHostPanel webview so both surfaces
@@ -156,6 +244,7 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<A
      */
     applyFilterAndSort(tools: InstalledTool[]): InstalledTool[] {
         this.refreshAnalytics(tools.map((t) => t.id));
+        this.refreshUpdates(tools.map((t) => t.id));
 
         const filter = this.getFilterState();
         const filtered = tools.filter((t) => {
@@ -209,6 +298,14 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<A
         }
 
         const favorites = new Set(this.toolManager.getFavorites());
-        return sorted.map((t) => new InstalledToolTreeItem(t, favorites.has(t.id), this.iconCacheManager));
+        return sorted.map(
+            (t) =>
+                new InstalledToolTreeItem(
+                    t,
+                    favorites.has(t.id),
+                    { hasUpdate: this.hasUpdate(t), latestVersion: this.getLatestVersion(t.id), isUpdating: this.toolManager.isUpdating(t.id) },
+                    this.iconCacheManager,
+                ),
+        );
     }
 }

@@ -226,6 +226,58 @@ export class ToolHostPanel {
                 }
                 break;
             }
+            case "update-tool": {
+                const toolId = message.toolId;
+                if (!toolId) {
+                    break;
+                }
+                const tool = this.toolManager.getAll().find((t) => t.id === toolId);
+                const registryTool = await this.toolRegistryManager.getToolById(toolId).catch(() => null);
+                if (!registryTool) {
+                    this.panel.webview.postMessage({ type: "update-error", toolId, message: "Tool not found in registry." });
+                    break;
+                }
+                try {
+                    await vscode.window.withProgress(
+                        { location: vscode.ProgressLocation.Notification, title: `Updating "${registryTool.name}" to v${registryTool.version}…`, cancellable: false },
+                        (progress) => this.toolManager.updateTool(registryTool, (msg) => progress.report({ message: msg })),
+                    );
+                    vscode.window.showInformationMessage(`"${tool?.name ?? registryTool.name}" updated to v${registryTool.version}.`);
+                    this.panel.webview.postMessage({ type: "update-done", toolId });
+                } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    vscode.window.showErrorMessage(`Update failed: ${msg}`);
+                    this.panel.webview.postMessage({ type: "update-error", toolId, message: msg });
+                } finally {
+                    this.installedToolsProvider.invalidateUpdateCache();
+                }
+                break;
+            }
+            case "update-all-tools": {
+                const toolsToUpdate = this.installedToolsProvider.getToolsWithUpdates();
+                let succeeded = 0;
+                const failures: string[] = [];
+                for (const tool of toolsToUpdate) {
+                    try {
+                        const registryTool = await this.toolRegistryManager.getToolById(tool.id);
+                        if (!registryTool) {
+                            throw new Error("Tool not found in registry.");
+                        }
+                        await this.toolManager.updateTool(registryTool);
+                        succeeded++;
+                    } catch {
+                        failures.push(tool.name);
+                    }
+                }
+                if (failures.length === 0) {
+                    vscode.window.showInformationMessage(`${succeeded} tool${succeeded === 1 ? "" : "s"} updated successfully.`);
+                } else {
+                    vscode.window.showWarningMessage(`${succeeded} of ${toolsToUpdate.length} tool(s) updated. Failed: ${failures.join(", ")}.`);
+                }
+                this.installedToolsProvider.invalidateUpdateCache();
+                this.panel.webview.postMessage({ type: "update-all-done" });
+                break;
+            }
             default:
                 logger.warn("ToolHostPanel: unrecognised message type:", message.type);
                 break;
@@ -237,7 +289,13 @@ export class ToolHostPanel {
         const favorites = this.toolManager.getFavorites();
         this.panel.webview.postMessage({
             type: "installed-tools",
-            tools: installedTools.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
+            tools: installedTools.map((t) => ({
+                ...t,
+                icon: this.resolveIconForWebview(t.icon),
+                hasUpdate: this.installedToolsProvider.hasUpdate(t),
+                latestVersion: this.installedToolsProvider.getLatestVersion(t.id),
+                isUpdating: this.toolManager.isUpdating(t.id),
+            })),
             categories: this.installedToolsProvider.getAvailableCategories(),
             sort: this.installedToolsProvider.getSortOption(),
             filter: this.installedToolsProvider.getFilterState(),

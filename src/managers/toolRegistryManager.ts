@@ -221,6 +221,36 @@ export class ToolRegistryManager {
     }
 
     /**
+     * Fetch the current registry version for a set of tool IDs, used to detect
+     * when an installed tool has an update available.
+     * Returns an empty map when the client isn't configured, no IDs are given,
+     * or the query fails.
+     */
+    async getLatestVersions(toolIds: string[]): Promise<Map<string, string>> {
+        const map = new Map<string, string>();
+        if (!this.client || toolIds.length === 0) {
+            return map;
+        }
+
+        const { data, error } = await this.client.from("tools").select("id, version").in("id", toolIds);
+
+        if (error) {
+            this.output.appendLine(`[Registry] getLatestVersions error: ${error.message}`);
+            return map;
+        }
+
+        for (const row of (data ?? []) as Record<string, unknown>[]) {
+            const id = str(row["id"]);
+            const version = str(row["version"]);
+            if (id && version) {
+                map.set(id, version);
+            }
+        }
+
+        return map;
+    }
+
+    /**
      * Fetch a single tool from the registry by its ID.
      * Returns `null` if the tool is not found or the client is not configured.
      */

@@ -112,6 +112,80 @@ export function registerToolCommands(
         }
     });
 
+    const updateToolCmd = vscode.commands.registerCommand("pptb.tools.update", async (item?: InstalledToolTreeItem) => {
+        if (!item?.tool) {
+            vscode.window.showWarningMessage("No tool selected to update.");
+            return;
+        }
+        const tool = item.tool;
+        const registryTool = await toolRegistryManager.getToolById(tool.id);
+        if (!registryTool) {
+            vscode.window.showErrorMessage(`"${tool.name}" could not be found in the registry.`);
+            return;
+        }
+        try {
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: `Updating "${tool.name}" to v${registryTool.version}…`,
+                    cancellable: false,
+                },
+                (progress) => toolManager.updateTool(registryTool, (message) => progress.report({ message })),
+            );
+            vscode.window.showInformationMessage(`"${tool.name}" updated to v${registryTool.version}.`);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const action = await vscode.window.showErrorMessage(`Update failed: ${msg}`, "Report Bug");
+            if (action === "Report Bug") {
+                await vscode.commands.executeCommand("pptb.help.reportBug");
+            }
+        } finally {
+            installedToolsProvider.invalidateUpdateCache();
+        }
+    });
+
+    const updateAllToolsCmd = vscode.commands.registerCommand("pptb.tools.updateAll", async () => {
+        const toolsToUpdate = installedToolsProvider.getToolsWithUpdates();
+        if (toolsToUpdate.length === 0) {
+            vscode.window.showInformationMessage("All tools are up to date.");
+            return;
+        }
+
+        let succeeded = 0;
+        const failures: string[] = [];
+
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: "Updating tools…",
+                cancellable: false,
+            },
+            async (progress) => {
+                // Updated one at a time (mirrors the desktop app) to avoid concurrent writes to the manifest file.
+                for (const [index, tool] of toolsToUpdate.entries()) {
+                    progress.report({ message: `${tool.name} (${index + 1}/${toolsToUpdate.length})` });
+                    try {
+                        const registryTool = await toolRegistryManager.getToolById(tool.id);
+                        if (!registryTool) {
+                            throw new Error("Tool not found in registry.");
+                        }
+                        await toolManager.updateTool(registryTool);
+                        succeeded++;
+                    } catch {
+                        failures.push(tool.name);
+                    }
+                }
+            },
+        );
+
+        if (failures.length === 0) {
+            vscode.window.showInformationMessage(`${succeeded} tool${succeeded === 1 ? "" : "s"} updated successfully.`);
+        } else {
+            vscode.window.showWarningMessage(`${succeeded} of ${toolsToUpdate.length} tool(s) updated. Failed: ${failures.join(", ")}.`);
+        }
+        installedToolsProvider.invalidateUpdateCache();
+    });
+
     const addFavoriteCmd = vscode.commands.registerCommand("pptb.tools.addFavorite", async (item?: InstalledToolTreeItem) => {
         if (!item?.tool) {
             return;
@@ -222,6 +296,8 @@ export function registerToolCommands(
         browseMarketplaceCmd,
         marketplaceUninstallCmd,
         installToolCmd,
+        updateToolCmd,
+        updateAllToolsCmd,
         addFavoriteCmd,
         removeFavoriteCmd,
         sortAndFilterInstalledCmd,

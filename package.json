@@ -149,6 +149,18 @@
         "icon": "$(trash)"
       },
       {
+        "command": "pptb.tools.update",
+        "title": "%command.tools.update.title%",
+        "category": "%command.category%",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "pptb.tools.updateAll",
+        "title": "%command.tools.updateAll.title%",
+        "category": "%command.category%",
+        "icon": "$(sync)"
+      },
+      {
         "command": "pptb.tools.revokeCspConsent",
         "title": "%command.tools.revokeCspConsent.title%",
         "category": "%command.category%",
@@ -278,6 +290,11 @@
           "group": "navigation"
         },
         {
+          "command": "pptb.tools.updateAll",
+          "when": "view == pptb.installedToolsView && pptb.hasToolUpdates",
+          "group": "navigation"
+        },
+        {
           "command": "pptb.tools.managePermissions",
           "when": "view == pptb.installedToolsView",
           "group": "navigation"
@@ -391,13 +408,18 @@
         },
         {
           "command": "pptb.tools.addFavorite",
-          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
           "group": "inline@2"
         },
         {
           "command": "pptb.tools.removeFavorite",
-          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool.favorite",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
           "group": "inline@2"
+        },
+        {
+          "command": "pptb.tools.update",
+          "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
+          "group": "inline@3"
         },
         {
           "command": "pptb.tools.launch",
@@ -406,13 +428,18 @@
         },
         {
           "command": "pptb.tools.addFavorite",
-          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
           "group": "1_manage@2"
         },
         {
           "command": "pptb.tools.removeFavorite",
-          "when": "view == pptb.installedToolsView && viewItem == pptb.installedTool.favorite",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
           "group": "1_manage@2"
+        },
+        {
+          "command": "pptb.tools.update",
+          "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
+          "group": "1_manage@3"
         },
         {
           "command": "pptb.tools.uninstall",

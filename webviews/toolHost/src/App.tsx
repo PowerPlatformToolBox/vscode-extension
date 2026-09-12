@@ -19,6 +19,9 @@ interface InstalledTool {
     icon?: ToolIconSource;
     toolPath: string;
     installedAt: string;
+    hasUpdate?: boolean;
+    latestVersion?: string;
+    isUpdating?: boolean;
 }
 
 interface RegistryTool {
@@ -387,6 +390,9 @@ function InstalledToolsTab(): React.ReactElement {
             if (data?.type === "uninstall-done") {
                 setTools((prev) => prev.filter((t) => t.id !== data.toolId));
             }
+            if (data?.type === "update-done" || data?.type === "update-error" || data?.type === "update-all-done") {
+                vscodeApi.postMessage({ type: "get-installed-tools" });
+            }
         };
 
         window.addEventListener("message", handler);
@@ -399,6 +405,14 @@ function InstalledToolsTab(): React.ReactElement {
 
     const uninstallTool = (tool: InstalledTool) => {
         vscodeApi.postMessage({ type: "uninstall-tool", toolId: tool.id });
+    };
+
+    const updateTool = (tool: InstalledTool) => {
+        vscodeApi.postMessage({ type: "update-tool", toolId: tool.id });
+    };
+
+    const updateAllTools = () => {
+        vscodeApi.postMessage({ type: "update-all-tools" });
     };
 
     const toggleFavorite = (tool: InstalledTool) => {
@@ -426,10 +440,17 @@ function InstalledToolsTab(): React.ReactElement {
             (formatContributors(t.contributors) ?? "").toLowerCase().includes(search.toLowerCase()),
     );
 
+    const updatableCount = tools.filter((t) => t.hasUpdate).length;
+
     return (
         <>
             <div style={toolbar}>
                 <input style={searchInput} type="text" placeholder="Search installed tools…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                {updatableCount > 0 && (
+                    <button style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px", flexShrink: 0 }} onClick={updateAllTools} title={`Update ${updatableCount} tool(s)`}>
+                        Update All ({updatableCount})
+                    </button>
+                )}
                 <span style={{ ...hint, flexShrink: 0 }}>
                     {filtered.length} / {tools.length}
                 </span>
@@ -495,13 +516,25 @@ function InstalledToolsTab(): React.ReactElement {
                                         </button>
                                     </div>
                                     <div style={{ ...hint, ...clampText, minHeight: 30 }}>{tool.description || " "}</div>
+                                    {tool.hasUpdate && !tool.isUpdating && <div style={{ ...hint, color: "var(--vscode-charts-blue, #0078d4)" }}>v{tool.latestVersion} update available</div>}
+                                    {tool.isUpdating && <div style={hint}>Updating…</div>}
                                     <div style={cardFooter}>
                                         {tool.categories?.length ? <span style={categoryChip}>{tool.categories.join(", ")}</span> : null}
                                         <span style={{ flex: 1 }} />
-                                        <button style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px" }} onClick={() => uninstallTool(tool)}>
+                                        <button style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px" }} onClick={() => uninstallTool(tool)} disabled={tool.isUpdating}>
                                             Uninstall
                                         </button>
-                                        <button style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }} onClick={() => launchTool(tool)}>
+                                        {tool.hasUpdate && (
+                                            <button
+                                                style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }}
+                                                onClick={() => updateTool(tool)}
+                                                disabled={tool.isUpdating}
+                                                title={`Update to v${tool.latestVersion}`}
+                                            >
+                                                {tool.isUpdating ? "Updating…" : "Update"}
+                                            </button>
+                                        )}
+                                        <button style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }} onClick={() => launchTool(tool)} disabled={tool.isUpdating}>
                                             Launch
                                         </button>
                                     </div>

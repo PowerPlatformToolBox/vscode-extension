@@ -109,6 +109,9 @@ export class ToolManager implements vscode.Disposable {
     private readonly output: vscode.OutputChannel;
     private readonly context: vscode.ExtensionContext;
 
+    /** IDs of tools currently being updated (mirrors the desktop app's `isToolUpdating`). */
+    private readonly updatingTools = new Set<string>();
+
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         this.toolsDirUri = vscode.Uri.joinPath(context.globalStorageUri, "tools");
@@ -136,6 +139,11 @@ export class ToolManager implements vscode.Disposable {
     /** Return `true` when a tool with the given ID is present in the manifest. */
     isInstalled(id: string): boolean {
         return this.readManifest().some((t) => t.id === id);
+    }
+
+    /** Return `true` when the given tool ID is currently being updated. */
+    isUpdating(id: string): boolean {
+        return this.updatingTools.has(id);
     }
 
     /** Return the IDs of tools marked as favorite. */
@@ -301,6 +309,25 @@ export class ToolManager implements vscode.Disposable {
 
         this._onToolsChanged.fire();
         return installed;
+    }
+
+    /**
+     * Update an installed tool to the latest version.
+     *
+     * Re-installs the tool using the given (presumably newer) registry metadata,
+     * replacing the currently-installed files. Fires `onToolsChanged` immediately
+     * so listeners (e.g. the tree view) can show an "updating" state, and again
+     * once the update completes or fails.
+     */
+    async updateTool(tool: Tool, onProgress?: (message: string) => void): Promise<InstalledTool> {
+        this.updatingTools.add(tool.id);
+        this._onToolsChanged.fire();
+        try {
+            return await this.install(tool, onProgress);
+        } finally {
+            this.updatingTools.delete(tool.id);
+            this._onToolsChanged.fire();
+        }
     }
 
     // ---------------------------------------------------------------------------
