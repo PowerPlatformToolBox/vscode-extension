@@ -87,12 +87,13 @@ How this extension compares to the [Power Platform ToolBox Desktop App](https://
 
 ### Tool Updates
 
-| Feature                                        | VS Code Extension | Desktop App |
-| ---------------------------------------------- | ----------------- | ----------- |
-| Check for a newer version of an installed tool | ❌                | ✅          |
-| One-click "Update" action                      | ❌                | ✅          |
-| Update-in-progress indicator                   | ❌                | ✅          |
-| Update-available badge/notification            | ❌                | ✅          |
+| Feature                                        | VS Code Extension             | Desktop App |
+| ---------------------------------------------- | ----------------------------- | ----------- |
+| Check for a newer version of an installed tool | ✅                            | ✅          |
+| One-click "Update" action                      | ✅                            | ✅          |
+| Update all available tools                     | ✅                            | ✅          |
+| Update-in-progress indicator                   | ✅                            | ✅          |
+| Update-available badge/notification            | ✅ (badge and context action) | ✅          |
 
 ### Personalization & Home
 
