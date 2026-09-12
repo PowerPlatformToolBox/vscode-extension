@@ -2,6 +2,8 @@
 .vscode-test/**
 .github/**
 src/**
+!src/polyfill/
+!src/polyfill/toolboxAPI.js
 webviews/**
 out/**
 node_modules/**
