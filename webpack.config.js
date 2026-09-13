@@ -2,9 +2,23 @@
 
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 const webpack = require("webpack");
 require("dotenv").config();
+
+class CopyPolyfillPlugin {
+    apply(compiler) {
+        compiler.hooks.afterEmit.tap("CopyPolyfillPlugin", () => {
+            const sourcePath = path.resolve(__dirname, "src", "polyfill", "toolboxAPI.js");
+            const targetDir = path.resolve(__dirname, "dist", "polyfill");
+            const targetPath = path.join(targetDir, "toolboxAPI.js");
+
+            fs.mkdirSync(targetDir, { recursive: true });
+            fs.copyFileSync(sourcePath, targetPath);
+        });
+    }
+}
 
 /** @type {import('webpack').Configuration[]} */
 const config = [
@@ -43,6 +57,7 @@ const config = [
                 "process.env.PPTB_SUPABASE_URL": JSON.stringify(process.env.PPTB_SUPABASE_URL ?? ""),
                 "process.env.PPTB_SUPABASE_ANON_KEY": JSON.stringify(process.env.PPTB_SUPABASE_ANON_KEY ?? ""),
             }),
+            new CopyPolyfillPlugin(),
         ],
         devtool: "nosources-source-map",
         infrastructureLogging: {

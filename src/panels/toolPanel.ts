@@ -373,7 +373,7 @@ export class ToolPanel {
                 const toolDir = path.dirname(candidate);
                 const baseUri = this.panel.webview.asWebviewUri(vscode.Uri.file(toolDir)).toString();
 
-                const polyfillPath = path.join(this.extensionUri.fsPath, "src", "polyfill", "toolboxAPI.js");
+                const polyfillPath = path.join(this.extensionUri.fsPath, "dist", "polyfill", "toolboxAPI.js");
                 const polyfillContent = fs.existsSync(polyfillPath) ? fs.readFileSync(polyfillPath, "utf8") : "";
 
                 let html = fs.readFileSync(candidate, "utf8");
