@@ -489,7 +489,7 @@
   "dependencies": {
     "@azure/msal-node": "^3.8.10",
     "@pptb/types": "1.2.4-beta.6",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "^2.112.3",
     "axios": "^1.18.1",
     "uuid": "^14.0.1"
   },
