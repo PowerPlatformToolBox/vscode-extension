@@ -12,6 +12,7 @@ import { getNonce } from "../utils/webview";
 
 type Managers = { connectionsManager: ConnectionsManager; dataverseManager: DataverseManager };
 type IconSource = string | { light: string; dark: string };
+type VerifiedIconSource = { light: string; dark: string };
 
 export interface ToolDetailModel {
     id: string;
@@ -38,6 +39,7 @@ export interface ToolDetailModel {
     installedVersion?: string;
     latestVersion?: string;
     hasUpdate?: boolean;
+    verifiedIcon?: VerifiedIconSource;
 }
 
 export class ToolDetailPanel {
@@ -74,7 +76,7 @@ export class ToolDetailPanel {
         installedTool?: InstalledTool,
     ): Promise<void> {
         const existing = this.panels.get(registryTool.id);
-        const model = this.createModel(registryTool, installedTool, iconCache, existing?.panel.webview);
+        const model = this.createModel(extensionUri, registryTool, installedTool, iconCache, existing?.panel.webview);
         if (existing) {
             existing.model = model;
             existing.panel.title = `Tool Details: ${model.name}`;
@@ -87,18 +89,24 @@ export class ToolDetailPanel {
         const panel = vscode.window.createWebviewPanel("pptb.toolDetailPanel", `Tool Details: ${model.name}`, vscode.ViewColumn.Active, {
             enableScripts: true,
             retainContextWhenHidden: true,
-            localResourceRoots: [vscode.Uri.joinPath(extensionUri, "dist", "webviews"), vscode.Uri.file(iconCache.cacheDir)],
+            localResourceRoots: [vscode.Uri.joinPath(extensionUri, "dist", "webviews"), vscode.Uri.joinPath(extensionUri, "resources"), vscode.Uri.file(iconCache.cacheDir)],
         });
-        const panelModel = this.createModel(registryTool, installedTool, iconCache, panel.webview);
+        const panelModel = this.createModel(extensionUri, registryTool, installedTool, iconCache, panel.webview);
         this.panels.set(registryTool.id, new ToolDetailPanel(panel, extensionUri, context, toolManager, registry, iconCache, cspConsent, managers, panelModel));
     }
 
-    private static createModel(tool: RegistryTool, installed: InstalledTool | undefined, iconCache: IconCacheManager, webview?: vscode.Webview): ToolDetailModel {
+    private static createModel(extensionUri: vscode.Uri, tool: RegistryTool, installed: InstalledTool | undefined, iconCache: IconCacheManager, webview?: vscode.Webview): ToolDetailModel {
         const icon = iconCache.getLocalUri(tool.icon);
         const iconSource = icon && webview
             ? "light" in icon
                 ? { light: webview.asWebviewUri(icon.light).toString(), dark: webview.asWebviewUri(icon.dark).toString() }
                 : webview.asWebviewUri(icon).toString()
+            : undefined;
+        const verifiedIcon = webview
+            ? {
+                light: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "resources", "verified-light.svg")).toString(),
+                dark: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "resources", "verified-dark.svg")).toString(),
+            }
             : undefined;
         return {
             ...tool,
@@ -109,6 +117,7 @@ export class ToolDetailPanel {
             installedVersion: installed?.version,
             latestVersion: tool.version,
             hasUpdate: Boolean(installed && isNewerVersion(installed.version, tool.version)),
+            verifiedIcon,
         };
     }
 
