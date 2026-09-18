@@ -51,6 +51,7 @@ export class InstalledToolTreeItem extends vscode.TreeItem {
         const label = [tool.name, isFavorite ? "\u2605" : undefined, isVerified ? "\u2713" : undefined, hasUpdate ? "\u2191" : undefined].filter(Boolean).join(" ");
         super(label, vscode.TreeItemCollapsibleState.None);
         this.tool = tool;
+        this.command = { command: "pptb.tools.showDetails", title: "Show Tool Details", arguments: [this] };
 
         const contributors = formatContributors(tool.contributors) || tool.publisher;
         const versionSuffix = isUpdating ? "updating\u2026" : hasUpdate ? `v${tool.version} \u2192 v${latestVersion}` : tool.version ? `v${tool.version}` : undefined;
