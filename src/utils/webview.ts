@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import * as vscode from "vscode";
 
 /**
  * Shared webview utilities for use across all VS Code webview panels.
@@ -13,4 +14,14 @@ import * as crypto from "crypto";
  */
 export function getNonce(): string {
     return crypto.randomBytes(32).toString("hex");
+}
+
+export type Theme = "light" | "dark";
+export type ThemeAssetUris = Record<Theme, string>;
+
+export function getThemeAssetUris(extensionUri: vscode.Uri, webview: vscode.Webview, fileName: string): ThemeAssetUris {
+    return {
+        light: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "resources", "light", fileName)).toString(),
+        dark: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "resources", "dark", fileName)).toString(),
+    };
 }

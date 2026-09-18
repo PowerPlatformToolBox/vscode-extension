@@ -1,18 +1,17 @@
-import * as vscode from "vscode";
 import * as http from "http";
 import * as https from "https";
+import * as vscode from "vscode";
 import type { ConnectionsManager } from "../managers/connectionsManager";
 import type { CspConsentManager } from "../managers/cspConsentManager";
 import type { DataverseManager } from "../managers/dataverseManager";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { InstalledTool, ToolManager } from "../managers/toolManager";
 import type { RegistryTool, ToolRegistryManager } from "../managers/toolRegistryManager";
+import { getNonce, getThemeAssetUris, type ThemeAssetUris } from "../utils/webview";
 import { ToolPanel } from "./toolPanel";
-import { getNonce } from "../utils/webview";
 
 type Managers = { connectionsManager: ConnectionsManager; dataverseManager: DataverseManager };
 type IconSource = string | { light: string; dark: string };
-type VerifiedIconSource = { light: string; dark: string };
 
 export interface ToolDetailModel {
     id: string;
@@ -39,7 +38,7 @@ export interface ToolDetailModel {
     installedVersion?: string;
     latestVersion?: string;
     hasUpdate?: boolean;
-    verifiedIcon?: VerifiedIconSource;
+    verifiedIcon?: ThemeAssetUris;
 }
 
 export class ToolDetailPanel {
@@ -97,17 +96,13 @@ export class ToolDetailPanel {
 
     private static createModel(extensionUri: vscode.Uri, tool: RegistryTool, installed: InstalledTool | undefined, iconCache: IconCacheManager, webview?: vscode.Webview): ToolDetailModel {
         const icon = iconCache.getLocalUri(tool.icon);
-        const iconSource = icon && webview
-            ? "light" in icon
-                ? { light: webview.asWebviewUri(icon.light).toString(), dark: webview.asWebviewUri(icon.dark).toString() }
-                : webview.asWebviewUri(icon).toString()
-            : undefined;
-        const verifiedIcon = webview
-            ? {
-                light: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "resources", "verified-light.svg")).toString(),
-                dark: webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "resources", "verified-dark.svg")).toString(),
-            }
-            : undefined;
+        const iconSource =
+            icon && webview
+                ? "light" in icon
+                    ? { light: webview.asWebviewUri(icon.light).toString(), dark: webview.asWebviewUri(icon.dark).toString() }
+                    : webview.asWebviewUri(icon).toString()
+                : undefined;
+        const verifiedIcon = webview ? getThemeAssetUris(extensionUri, webview, "verified.svg") : undefined;
         return {
             ...tool,
             icon: iconSource,
