@@ -184,7 +184,7 @@ export class ToolHostPanel {
             case "launch-tool": {
                 const toolId = message.toolId;
                 if (toolId) {
-                    ToolPanel.open(this.extensionUri, this.context, toolId, this.toolManager, this.toolRegistryManager, this.cspConsentManager, this.managers);
+                    void ToolPanel.open(this.extensionUri, this.context, toolId, this.toolManager, this.toolRegistryManager, this.cspConsentManager, this.managers);
                 }
                 break;
             }
@@ -195,19 +195,19 @@ export class ToolHostPanel {
                 }
                 const registryTool = await this.toolRegistryManager.getToolById(toolId).catch(() => null);
                 if (!registryTool) {
-                    this.panel.webview.postMessage({ type: "install-error", toolId, message: "Tool not found in registry." });
+                    void this.panel.webview.postMessage({ type: "install-error", toolId, message: "Tool not found in registry." });
                     break;
                 }
                 try {
                     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Installing "${registryTool.name}"…`, cancellable: false }, (progress) =>
                         this.toolManager.install(registryTool, (msg) => progress.report({ message: msg })),
                     );
-                    vscode.window.showInformationMessage(`"${registryTool.name}" installed successfully.`);
-                    this.panel.webview.postMessage({ type: "install-done", toolId });
+                    void vscode.window.showInformationMessage(`"${registryTool.name}" installed successfully.`);
+                    void this.panel.webview.postMessage({ type: "install-done", toolId });
                 } catch (err: unknown) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    vscode.window.showErrorMessage(`Install failed: ${msg}`);
-                    this.panel.webview.postMessage({ type: "install-error", toolId, message: msg });
+                    void vscode.window.showErrorMessage(`Install failed: ${msg}`);
+                    void this.panel.webview.postMessage({ type: "install-error", toolId, message: msg });
                 }
                 break;
             }
@@ -221,8 +221,8 @@ export class ToolHostPanel {
                 const confirm = await vscode.window.showWarningMessage(`Uninstall "${name}"? This cannot be undone.`, { modal: true }, "Uninstall");
                 if (confirm === "Uninstall") {
                     await this.toolManager.uninstall(toolId);
-                    vscode.window.showInformationMessage(`"${name}" uninstalled.`);
-                    this.panel.webview.postMessage({ type: "uninstall-done", toolId });
+                    void vscode.window.showInformationMessage(`"${name}" uninstalled.`);
+                    void this.panel.webview.postMessage({ type: "uninstall-done", toolId });
                 }
                 break;
             }
@@ -234,7 +234,7 @@ export class ToolHostPanel {
                 const tool = this.toolManager.getAll().find((t) => t.id === toolId);
                 const registryTool = await this.toolRegistryManager.getToolById(toolId).catch(() => null);
                 if (!registryTool) {
-                    this.panel.webview.postMessage({ type: "update-error", toolId, message: "Tool not found in registry." });
+                    void this.panel.webview.postMessage({ type: "update-error", toolId, message: "Tool not found in registry." });
                     break;
                 }
                 try {
@@ -242,12 +242,12 @@ export class ToolHostPanel {
                         { location: vscode.ProgressLocation.Notification, title: `Updating "${registryTool.name}" to v${registryTool.version}…`, cancellable: false },
                         (progress) => this.toolManager.updateTool(registryTool, (msg) => progress.report({ message: msg })),
                     );
-                    vscode.window.showInformationMessage(`"${tool?.name ?? registryTool.name}" updated to v${registryTool.version}.`);
-                    this.panel.webview.postMessage({ type: "update-done", toolId });
+                    void vscode.window.showInformationMessage(`"${tool?.name ?? registryTool.name}" updated to v${registryTool.version}.`);
+                    void this.panel.webview.postMessage({ type: "update-done", toolId });
                 } catch (err: unknown) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    vscode.window.showErrorMessage(`Update failed: ${msg}`);
-                    this.panel.webview.postMessage({ type: "update-error", toolId, message: msg });
+                    void vscode.window.showErrorMessage(`Update failed: ${msg}`);
+                    void this.panel.webview.postMessage({ type: "update-error", toolId, message: msg });
                 } finally {
                     this.installedToolsProvider.invalidateUpdateCache();
                 }
@@ -270,12 +270,12 @@ export class ToolHostPanel {
                     }
                 }
                 if (failures.length === 0) {
-                    vscode.window.showInformationMessage(`${succeeded} tool${succeeded === 1 ? "" : "s"} updated successfully.`);
+                    void vscode.window.showInformationMessage(`${succeeded} tool${succeeded === 1 ? "" : "s"} updated successfully.`);
                 } else {
-                    vscode.window.showWarningMessage(`${succeeded} of ${toolsToUpdate.length} tool(s) updated. Failed: ${failures.join(", ")}.`);
+                    void vscode.window.showWarningMessage(`${succeeded} of ${toolsToUpdate.length} tool(s) updated. Failed: ${failures.join(", ")}.`);
                 }
                 this.installedToolsProvider.invalidateUpdateCache();
-                this.panel.webview.postMessage({ type: "update-all-done" });
+                void this.panel.webview.postMessage({ type: "update-all-done" });
                 break;
             }
             default:
@@ -287,7 +287,7 @@ export class ToolHostPanel {
     private postInstalledTools(): void {
         const installedTools = this.installedToolsProvider.applyFilterAndSort(this.toolManager.getAll());
         const favorites = this.toolManager.getFavorites();
-        this.panel.webview.postMessage({
+        void this.panel.webview.postMessage({
             type: "installed-tools",
             tools: installedTools.map((t) => ({
                 ...t,
@@ -308,7 +308,7 @@ export class ToolHostPanel {
             const result = await this.toolRegistryManager.getTools({ search, page });
             const filteredSorted = this.marketplaceProvider.applyFilterAndSort(result.tools);
             const installedIds = new Set(this.toolManager.getAll().map((t) => t.id));
-            this.panel.webview.postMessage({
+            void this.panel.webview.postMessage({
                 type: "marketplace-tools",
                 tools: filteredSorted.map((t) => ({ ...t, icon: this.resolveIconForWebview(t.icon) })),
                 total: result.total,
@@ -320,7 +320,7 @@ export class ToolHostPanel {
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error("ToolHostPanel get-marketplace-tools error:", msg);
-            this.panel.webview.postMessage({ type: "marketplace-error", message: msg });
+            void this.panel.webview.postMessage({ type: "marketplace-error", message: msg });
         }
     }
 

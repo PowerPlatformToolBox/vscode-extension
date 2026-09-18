@@ -59,7 +59,7 @@ export class ConnectionStatusBar {
     private async showConnectionPicker(): Promise<void> {
         const connections = this.connectionsManager.getAll();
         if (connections.length === 0) {
-            vscode.window.showInformationMessage("No connections saved. Use PPTB: Add Connection to create one.");
+            void vscode.window.showInformationMessage("No connections saved. Use PPTB: Add Connection to create one.");
             return;
         }
 

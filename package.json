@@ -513,7 +513,7 @@
     "@pptb/types": "1.2.5",
     "@supabase/supabase-js": "^2.108.2",
     "axios": "^1.19.0",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.2",
     "dompurify": "^3.2.6",
     "marked": "^16.1.2"
   },

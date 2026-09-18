@@ -108,7 +108,7 @@ export class ToolRegistryManager {
         this.output.appendLine(`[Registry] Key  : ${key ? "(set)" : "(not set)"}`);
 
         if (!url || !key) {
-            vscode.window.showInformationMessage("PPTB: Supabase credentials are not configured — tool registry features will be unavailable.");
+            void vscode.window.showInformationMessage("PPTB: Supabase credentials are not configured — tool registry features will be unavailable.");
             this.client = null;
             return;
         }
@@ -137,7 +137,7 @@ export class ToolRegistryManager {
         const from = (page - 1) * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        const buildQuery = (selectColumns: string) => {
+        const buildQuery = (selectColumns: string): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null }> => {
             // Typed as `any`: supabase-js infers row shape from the literal `selectColumns`
             // string, which breaks down once it's widened to `string` here — that's fine
             // since we parse rows manually via `mapRow` regardless of the inferred type.

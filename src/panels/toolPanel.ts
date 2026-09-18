@@ -450,7 +450,7 @@ export class ToolPanel {
     }
 
     private postApiResponse(requestId: string, success: boolean, data?: unknown, error?: string): void {
-        this.panel.webview.postMessage({
+        void this.panel.webview.postMessage({
             source: "pptb-host",
             type: "pptb:response",
             requestId,
@@ -915,7 +915,7 @@ export class ToolPanel {
             secondaryConnectionId: typeof next?.secondaryConnectionId === "string" || next?.secondaryConnectionId === null ? next.secondaryConnectionId : this.toolContext.secondaryConnectionId,
         };
 
-        this.panel.webview.postMessage({
+        void this.panel.webview.postMessage({
             source: "pptb-host",
             type: "pptb:context",
             context: this.toolContext,
@@ -934,7 +934,7 @@ export class ToolPanel {
             this.eventHistory.splice(0, this.eventHistory.length - 200);
         }
 
-        this.panel.webview.postMessage({
+        void this.panel.webview.postMessage({
             source: "pptb-host",
             type: "pptb:event",
             event,

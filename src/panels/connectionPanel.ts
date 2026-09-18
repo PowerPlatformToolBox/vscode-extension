@@ -44,7 +44,7 @@ export class ConnectionPanel {
         // Send initial data once the webview signals it is ready
         // We use a short delay to allow React to mount
         setTimeout(() => {
-            this.panel.webview.postMessage({
+            void this.panel.webview.postMessage({
                 type: "pptb:init",
                 connection,
                 categories,
@@ -71,7 +71,7 @@ export class ConnectionPanel {
 
         if (ConnectionPanel.currentPanel) {
             ConnectionPanel.currentPanel.panel.reveal(column ?? vscode.ViewColumn.One);
-            ConnectionPanel.currentPanel.panel.webview.postMessage({
+            void ConnectionPanel.currentPanel.panel.webview.postMessage({
                 type: "pptb:init",
                 connection: connectionWithSecrets,
                 categories,
@@ -115,7 +115,7 @@ export class ConnectionPanel {
                 }
                 break;
             case "pptb:checkBrowserInstalled":
-                this.panel.webview.postMessage({
+                void this.panel.webview.postMessage({
                     type: "pptb:browserInstalledResult",
                     requestId: message.requestId,
                     browser: message.browser,
@@ -123,7 +123,7 @@ export class ConnectionPanel {
                 });
                 break;
             case "pptb:getBrowserProfiles":
-                this.panel.webview.postMessage({
+                void this.panel.webview.postMessage({
                     type: "pptb:browserProfilesResult",
                     requestId: message.requestId,
                     browser: message.browser,
@@ -149,25 +149,25 @@ export class ConnectionPanel {
             } else {
                 await this.connectionsManager.add(connection);
             }
-            vscode.window.showInformationMessage(`Connection "${connection.name}" saved.`);
+            void vscode.window.showInformationMessage(`Connection "${connection.name}" saved.`);
             this.dispose();
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            vscode.window.showErrorMessage(`Failed to save connection: ${message}`);
+            void vscode.window.showErrorMessage(`Failed to save connection: ${message}`);
         }
     }
 
     private async handleTest(connection: Connection): Promise<void> {
         try {
             const success = await this.connectionsManager.testConnection(connection);
-            this.panel.webview.postMessage({
+            void this.panel.webview.postMessage({
                 type: "pptb:testResult",
                 success,
                 error: success ? undefined : "Connection test failed",
             });
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            this.panel.webview.postMessage({
+            void this.panel.webview.postMessage({
                 type: "pptb:testResult",
                 success: false,
                 error: message,

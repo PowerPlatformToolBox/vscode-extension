@@ -45,17 +45,25 @@ export class CspPermissionsPanel {
 
         this.panel.webview.onDidReceiveMessage(
             (message: { type: string; toolId?: string }) => {
-                this.handleMessage(message);
+                void this.handleMessage(message);
             },
             null,
             this.disposables,
         );
 
-        this.disposables.push(this.iconCacheManager.onIconsCached(() => this.postState()));
-        this.disposables.push(this.toolManager.onToolsChanged(() => this.postState()));
+        this.disposables.push(
+            this.iconCacheManager.onIconsCached(() => {
+                void this.postState();
+            }),
+        );
+        this.disposables.push(
+            this.toolManager.onToolsChanged(() => {
+                void this.postState();
+            }),
+        );
 
         setTimeout(() => {
-            this.postState();
+            void this.postState();
         }, 300);
     }
 

@@ -130,7 +130,7 @@ export class ToolDetailPanel {
                     await this.toolManager.install(await this.registry.getToolById(this.model.id).then((tool) => tool ?? this.modelToRegistry()));
                     this.model = { ...this.model, isInstalled: true, installedVersion: this.model.version, hasUpdate: false };
                     this.postState();
-                    vscode.window.showInformationMessage(`"${this.model.name}" installed successfully.`);
+                    void vscode.window.showInformationMessage(`"${this.model.name}" installed successfully.`);
                     break;
                 case "update": {
                     const tool = await this.registry.getToolById(this.model.id);
@@ -146,12 +146,12 @@ export class ToolDetailPanel {
                     this.postState();
                     break;
                 case "launch":
-                    ToolPanel.open(this.extensionUri, this.context, this.model.id, this.toolManager, this.registry, this.cspConsent, this.managers);
+                    void ToolPanel.open(this.extensionUri, this.context, this.model.id, this.toolManager, this.registry, this.cspConsent, this.managers);
                     break;
             }
         } catch (error) {
-            vscode.window.showErrorMessage(`Tool action failed: ${error instanceof Error ? error.message : String(error)}`);
-            this.panel.webview.postMessage({ type: "error", message: error instanceof Error ? error.message : String(error) });
+            void vscode.window.showErrorMessage(`Tool action failed: ${error instanceof Error ? error.message : String(error)}`);
+            void this.panel.webview.postMessage({ type: "error", message: error instanceof Error ? error.message : String(error) });
         }
     }
 
@@ -180,19 +180,19 @@ export class ToolDetailPanel {
     }
 
     private postState(): void {
-        this.panel.webview.postMessage({ type: "state", model: this.model });
+        void this.panel.webview.postMessage({ type: "state", model: this.model });
     }
 
     private async loadReadme(): Promise<void> {
         const url = this.model.readmeUrl;
         if (!url || !url.startsWith("https://")) {
-            this.panel.webview.postMessage({ type: "readme", markdown: "Documentation is not available for this tool." });
+            void this.panel.webview.postMessage({ type: "readme", markdown: "Documentation is not available for this tool." });
             return;
         }
         try {
-            this.panel.webview.postMessage({ type: "readme", markdown: await downloadText(url) });
+            void this.panel.webview.postMessage({ type: "readme", markdown: await downloadText(url) });
         } catch {
-            this.panel.webview.postMessage({ type: "readme", markdown: "Unable to load documentation." });
+            void this.panel.webview.postMessage({ type: "readme", markdown: "Unable to load documentation." });
         }
     }
 

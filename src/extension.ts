@@ -72,7 +72,7 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     // ── Warm up icon cache in background ─────────────────────────────────────
-    void (async () => {
+    void (async (): Promise<void> => {
         try {
             const installedIconUrls = toolManager
                 .getAll()
