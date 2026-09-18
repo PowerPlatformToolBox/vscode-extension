@@ -27,6 +27,7 @@ export class MarketplaceToolTreeItem extends vscode.TreeItem {
         const label = isVerified ? `${tool.name} \u2713` : tool.name;
         super(label, vscode.TreeItemCollapsibleState.None);
         this.registryTool = tool;
+        this.command = { command: "pptb.marketplace.showDetails", title: "Show Tool Details", arguments: [this] };
 
         const contributors = formatContributors(tool.contributors) || tool.publisher;
         this.description = [contributors, tool.version ? `v${tool.version}` : undefined].filter(Boolean).join(" · ");

@@ -34,6 +34,13 @@ export interface RegistryTool {
     categories?: string[];
     /** Capability tags that describe what this tool can do. */
     capabilityTags?: string[];
+    readmeUrl?: string;
+    repository?: string;
+    website?: string;
+    license?: string;
+    publishedAt?: string;
+    createdAt?: string;
+    status?: "active" | "deprecated" | "archived";
     /** Total download count (analytics), when available. */
     downloads?: number;
     /** Average user rating (analytics), when available. */
@@ -574,8 +581,22 @@ function mapRow(row: Record<string, unknown>): RegistryTool {
         executableRelativePath: str(row["executableRelativePath"]) ?? str(row["executable_relative_path"]),
         categories: parseCategoriesFromRecord(row),
         capabilityTags: (Array.isArray(row["capabilityTags"]) ? row["capabilityTags"] : Array.isArray(row["capability_tags"]) ? row["capability_tags"] : undefined) as string[] | undefined,
+        // Supabase uses the legacy lowercase column name `readmeurl`, which is
+        // also the field consumed by the desktop app's registry mapper.
+        readmeUrl: str(row["readmeurl"]) ?? str(row["readmeUrl"]) ?? str(row["readme_url"]) ?? str(row["readme"]),
+        repository: str(row["repository"]) ?? str(row["repository_url"]),
+        website: str(row["website"]) ?? str(row["website_url"]),
+        license: str(row["license"]),
+        publishedAt: str(row["publishedAt"]) ?? str(row["published_at"]),
+        createdAt: str(row["createdAt"]) ?? str(row["created_at"]),
+        status: parseStatus(row["status"]),
         downloads: analytics?.downloads,
         rating: analytics?.rating,
         mau: analytics?.mau,
     };
+}
+
+function parseStatus(value: unknown): RegistryTool["status"] {
+    const status = str(value)?.toLowerCase();
+    return status === "active" || status === "deprecated" || status === "archived" ? status : undefined;
 }
