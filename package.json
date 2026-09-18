@@ -213,6 +213,12 @@
         "icon": "$(run)"
       },
       {
+        "command": "pptb.tools.showDetails",
+        "title": "%command.tools.showDetails.title%",
+        "category": "%command.category%",
+        "icon": "$(info)"
+      },
+      {
         "command": "pptb.tools.browse",
         "title": "%command.tools.browse.title%",
         "category": "%command.category%",
@@ -229,6 +235,12 @@
         "title": "%command.marketplace.browse.title%",
         "category": "%command.category%",
         "icon": "$(list-flat)"
+      },
+      {
+        "command": "pptb.marketplace.showDetails",
+        "title": "%command.marketplace.showDetails.title%",
+        "category": "%command.category%",
+        "icon": "$(info)"
       },
       {
         "command": "pptb.help.reportBug",
@@ -361,6 +373,11 @@
       ],
       "view/item/context": [
         {
+          "command": "pptb.tools.showDetails",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+          "group": "2_details@1"
+        },
+        {
           "command": "pptb.connections.connect",
           "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
           "group": "inline@1"
@@ -423,32 +440,37 @@
         {
           "command": "pptb.tools.launch",
           "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "1_manage@1"
+          "group": "1_action@1"
         },
         {
           "command": "pptb.tools.addFavorite",
           "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
-          "group": "1_manage@2"
+          "group": "1_action@2"
         },
         {
           "command": "pptb.tools.removeFavorite",
           "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
-          "group": "1_manage@2"
+          "group": "1_action@2"
         },
         {
           "command": "pptb.tools.update",
           "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
-          "group": "1_manage@3"
+          "group": "1_action@3"
         },
         {
           "command": "pptb.tools.uninstall",
           "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "2_manage@1"
+          "group": "4_delete@1"
         },
         {
           "command": "pptb.tools.revokeCspConsent",
           "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "2_manage@2"
+          "group": "3_manage@1"
+        },
+        {
+          "command": "pptb.marketplace.showDetails",
+          "when": "view == pptb.marketplaceView && viewItem =~ /^pptb\\.marketplaceTool/",
+          "group": "2_details@1"
         },
         {
           "command": "pptb.marketplace.install",
@@ -458,7 +480,7 @@
         {
           "command": "pptb.marketplace.install",
           "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
-          "group": "1_manage@1"
+          "group": "1_action@1"
         },
         {
           "command": "pptb.marketplace.uninstall",
@@ -468,7 +490,7 @@
         {
           "command": "pptb.marketplace.uninstall",
           "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
-          "group": "1_manage@1"
+          "group": "4_delete@1"
         }
       ]
     }
@@ -491,6 +513,8 @@
     "@pptb/types": "1.2.5",
     "@supabase/supabase-js": "^2.108.2",
     "axios": "^1.18.1",
+    "dompurify": "^3.2.6",
+    "marked": "^16.1.2",
     "uuid": "^14.0.1"
   },
   "devDependencies": {
