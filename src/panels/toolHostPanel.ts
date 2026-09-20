@@ -11,6 +11,7 @@ import type { MarketplaceFilterState, MarketplaceSortOption, MarketplaceTreeData
 import { logger } from "../utils/logger";
 import { getNonce } from "../utils/webview";
 import { ToolPanel } from "./toolPanel";
+import { ToolDetailPanel } from "./toolDetailPanel";
 
 type OpenManagers = {
     connectionsManager?: ConnectionsManager;
@@ -69,7 +70,7 @@ export class ToolHostPanel {
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
         this.panel.webview.onDidReceiveMessage(
-            (message: { type: string; toolId?: string; search?: string; page?: number; sort?: string; filter?: unknown }) => {
+            (message: { type: string; toolId?: string; url?: string; search?: string; page?: number; sort?: string; filter?: unknown }) => {
                 this.handleMessage(message).catch((err: unknown) => {
                     const msg = err instanceof Error ? err.message : String(err);
                     logger.error("ToolHostPanel message handler error:", msg);
@@ -147,7 +148,7 @@ export class ToolHostPanel {
         this.disposables = [];
     }
 
-    private async handleMessage(message: { type: string; toolId?: string; search?: string; page?: number; sort?: string; filter?: unknown }): Promise<void> {
+    private async handleMessage(message: { type: string; toolId?: string; url?: string; search?: string; page?: number; sort?: string; filter?: unknown }): Promise<void> {
         switch (message.type) {
             case "get-installed-tools": {
                 this.postInstalledTools();
@@ -186,6 +187,20 @@ export class ToolHostPanel {
                 if (toolId) {
                     void ToolPanel.open(this.extensionUri, this.context, toolId, this.toolManager, this.toolRegistryManager, this.cspConsentManager, this.managers);
                 }
+                break;
+            }
+            case "open-tool-details": {
+                const connectionsManager = this.managers?.connectionsManager;
+                const dataverseManager = this.managers?.dataverseManager;
+                if (!message.toolId || !connectionsManager || !dataverseManager) break;
+                const registryTool = await this.toolRegistryManager.getToolById(message.toolId);
+                if (registryTool) {
+                    await ToolDetailPanel.open(this.extensionUri, this.context, this.toolManager, this.toolRegistryManager, this.iconCacheManager, this.cspConsentManager, { connectionsManager, dataverseManager }, registryTool, this.toolManager.getById(message.toolId));
+                }
+                break;
+            }
+            case "open-link": {
+                if (message.url?.startsWith("https://")) await vscode.env.openExternal(vscode.Uri.parse(message.url));
                 break;
             }
             case "install-tool": {
@@ -295,6 +310,7 @@ export class ToolHostPanel {
                 hasUpdate: this.installedToolsProvider.hasUpdate(t),
                 latestVersion: this.installedToolsProvider.getLatestVersion(t.id),
                 isUpdating: this.toolManager.isUpdating(t.id),
+                ...this.installedToolsProvider.getAnalytics(t.id),
             })),
             categories: this.installedToolsProvider.getAvailableCategories(),
             sort: this.installedToolsProvider.getSortOption(),
