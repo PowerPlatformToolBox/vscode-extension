@@ -511,7 +511,7 @@
   "dependencies": {
     "@azure/msal-node": "^3.8.10",
     "@pptb/types": "1.2.5",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "^2.112.4",
     "axios": "^1.19.0",
     "uuid": "^14.0.2",
     "dompurify": "^3.2.6",
