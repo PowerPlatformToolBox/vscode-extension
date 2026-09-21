@@ -219,6 +219,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "pptb.tools.feedback",
+        "title": "%command.tools.feedback.title%",
+        "category": "%command.category%",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "pptb.tools.browse",
         "title": "%command.tools.browse.title%",
         "category": "%command.category%",
@@ -378,6 +384,11 @@
           "group": "2_details@1"
         },
         {
+          "command": "pptb.tools.feedback",
+          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+          "group": "3_support@1"
+        },
+        {
           "command": "pptb.connections.connect",
           "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
           "group": "inline@1"
@@ -510,12 +521,12 @@
   },
   "dependencies": {
     "@azure/msal-node": "^3.8.10",
-    "@pptb/types": "1.2.5",
+    "@pptb/types": "1.2.4-beta.6",
     "@supabase/supabase-js": "^2.108.2",
-    "axios": "^1.19.0",
-    "uuid": "^14.0.2",
+    "axios": "^1.18.1",
     "dompurify": "^3.2.6",
-    "marked": "^16.1.2"
+    "marked": "^16.1.2",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

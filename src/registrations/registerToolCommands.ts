@@ -6,11 +6,12 @@ import type { IconCacheManager } from "../managers/iconCacheManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { CspPermissionsPanel } from "../panels/cspPermissionsPanel";
-import { ToolDetailPanel } from "../panels/toolDetailPanel";
 import { ToolHostPanel } from "../panels/toolHostPanel";
 import { ToolPanel } from "../panels/toolPanel";
+import { ToolDetailPanel } from "../panels/toolDetailPanel";
 import { InstalledToolsTreeDataProvider, InstalledToolTreeItem, type InstalledToolsSortOption } from "../providers/installedToolsTreeDataProvider";
 import { MarketplaceToolTreeItem, MarketplaceTreeDataProvider, type MarketplaceSortOption } from "../providers/marketplaceTreeDataProvider";
+import { buildToolFeedbackUrl } from "../utils/feedback";
 
 export function registerToolCommands(
     context: vscode.ExtensionContext,
@@ -27,36 +28,47 @@ export function registerToolCommands(
 
     const showInstalledDetailsCmd = vscode.commands.registerCommand("pptb.tools.showDetails", async (item?: InstalledToolTreeItem) => {
         if (!item?.tool) {
-            void vscode.window.showWarningMessage("No tool selected.");
+            vscode.window.showWarningMessage("No tool selected.");
             return;
         }
         const registryTool = await toolRegistryManager.getToolById(item.tool.id);
         if (!registryTool) {
-            void vscode.window.showWarningMessage(`Details for "${item.tool.name}" are not available in the registry.`);
+            vscode.window.showWarningMessage(`Details for "${item.tool.name}" are not available in the registry.`);
             return;
         }
-        await ToolDetailPanel.open(
-            context.extensionUri,
-            context,
-            toolManager,
-            toolRegistryManager,
-            iconCacheManager,
-            cspConsentManager,
-            { connectionsManager, dataverseManager },
-            registryTool,
-            item.tool,
-        );
+        await ToolDetailPanel.open(context.extensionUri, context, toolManager, toolRegistryManager, iconCacheManager, cspConsentManager, { connectionsManager, dataverseManager }, registryTool, item.tool);
+    });
+
+    const toolFeedbackCmd = vscode.commands.registerCommand("pptb.tools.feedback", async (item?: InstalledToolTreeItem) => {
+        if (!item?.tool) {
+            vscode.window.showWarningMessage("No tool selected.");
+            return;
+        }
+
+        const repositoryUrl = item.tool.repository;
+        if (!repositoryUrl) {
+            const action = await vscode.window.showInformationMessage(
+                `The creator of "${item.tool.name}" has not provided a support link.`,
+                "Open PPTB Discord",
+            );
+            if (action === "Open PPTB Discord") {
+                await vscode.commands.executeCommand("pptb.help.joinDiscord");
+            }
+            return;
+        }
+
+        await vscode.env.openExternal(vscode.Uri.parse(buildToolFeedbackUrl(repositoryUrl, item.tool)));
     });
 
     const uninstallToolCmd = vscode.commands.registerCommand("pptb.tools.uninstall", async (item?: InstalledToolTreeItem) => {
         if (!item?.tool) {
-            void vscode.window.showWarningMessage("No tool selected to uninstall.");
+            vscode.window.showWarningMessage("No tool selected to uninstall.");
             return;
         }
         const confirm = await vscode.window.showWarningMessage(`Uninstall "${item.tool.name}"? This cannot be undone.`, { modal: true }, "Uninstall");
         if (confirm === "Uninstall") {
             await toolManager.uninstall(item.tool.id);
-            void vscode.window.showInformationMessage(`"${item.tool.name}" uninstalled.`);
+            vscode.window.showInformationMessage(`"${item.tool.name}" uninstalled.`);
         }
     });
 
@@ -64,56 +76,46 @@ export function registerToolCommands(
 
     const showMarketplaceDetailsCmd = vscode.commands.registerCommand("pptb.marketplace.showDetails", async (item?: MarketplaceToolTreeItem) => {
         if (!item?.registryTool) {
-            void vscode.window.showWarningMessage("No tool selected.");
+            vscode.window.showWarningMessage("No tool selected.");
             return;
         }
         const installed = toolManager.getById(item.registryTool.id);
-        await ToolDetailPanel.open(
-            context.extensionUri,
-            context,
-            toolManager,
-            toolRegistryManager,
-            iconCacheManager,
-            cspConsentManager,
-            { connectionsManager, dataverseManager },
-            item.registryTool,
-            installed,
-        );
+        await ToolDetailPanel.open(context.extensionUri, context, toolManager, toolRegistryManager, iconCacheManager, cspConsentManager, { connectionsManager, dataverseManager }, item.registryTool, installed);
     });
 
     const launchToolCmd = vscode.commands.registerCommand("pptb.tools.launch", (item?: InstalledToolTreeItem) => {
         if (!item?.tool.id) {
             return;
         }
-        void ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, { connectionsManager, dataverseManager });
+        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, { connectionsManager, dataverseManager });
     });
 
     const revokeCspConsentCmd = vscode.commands.registerCommand("pptb.tools.revokeCspConsent", async (item?: InstalledToolTreeItem) => {
         if (!item?.tool) {
-            void vscode.window.showWarningMessage("No tool selected.");
+            vscode.window.showWarningMessage("No tool selected.");
             return;
         }
         if (!cspConsentManager.hasStoredConsent(item.tool.id)) {
-            void vscode.window.showInformationMessage(`"${item.tool.name}" has no granted CSP permissions to revoke.`);
+            vscode.window.showInformationMessage(`"${item.tool.name}" has no granted CSP permissions to revoke.`);
             return;
         }
         await cspConsentManager.revoke(item.tool.id);
-        void vscode.window.showInformationMessage(`CSP consent revoked for "${item.tool.name}". You'll be prompted again the next time it's launched.`);
+        vscode.window.showInformationMessage(`CSP consent revoked for "${item.tool.name}". You'll be prompted again the next time it's launched.`);
     });
 
     const managePermissionsCmd = vscode.commands.registerCommand("pptb.tools.managePermissions", () => {
-        void CspPermissionsPanel.open(context.extensionUri, toolManager, cspConsentManager, iconCacheManager);
+        CspPermissionsPanel.open(context.extensionUri, toolManager, cspConsentManager, iconCacheManager);
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
-        void ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "installed", {
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "installed", {
             connectionsManager,
             dataverseManager,
         });
     });
 
     const browseMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.browse", () => {
-        void ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "marketplace", {
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "marketplace", {
             connectionsManager,
             dataverseManager,
         });
@@ -121,19 +123,19 @@ export function registerToolCommands(
 
     const marketplaceUninstallCmd = vscode.commands.registerCommand("pptb.marketplace.uninstall", async (item?: MarketplaceToolTreeItem) => {
         if (!item?.registryTool) {
-            void vscode.window.showWarningMessage("No tool selected.");
+            vscode.window.showWarningMessage("No tool selected.");
             return;
         }
         const confirm = await vscode.window.showWarningMessage(`Uninstall "${item.registryTool.name}"? This cannot be undone.`, { modal: true }, "Uninstall");
         if (confirm === "Uninstall") {
             await toolManager.uninstall(item.registryTool.id);
-            void vscode.window.showInformationMessage(`"${item.registryTool.name}" uninstalled.`);
+            vscode.window.showInformationMessage(`"${item.registryTool.name}" uninstalled.`);
         }
     });
 
     const installToolCmd = vscode.commands.registerCommand("pptb.marketplace.install", async (item?: MarketplaceToolTreeItem) => {
         if (!item?.registryTool) {
-            void vscode.window.showWarningMessage("No tool selected to install.");
+            vscode.window.showWarningMessage("No tool selected to install.");
             return;
         }
         try {
@@ -145,7 +147,7 @@ export function registerToolCommands(
                 },
                 (progress) => toolManager.install(item.registryTool!, (message) => progress.report({ message })),
             );
-            void vscode.window.showInformationMessage(`"${item.registryTool.name}" installed successfully.`);
+            vscode.window.showInformationMessage(`"${item.registryTool.name}" installed successfully.`);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             const action = await vscode.window.showErrorMessage(`Install failed: ${msg}`, "Report Bug");
@@ -157,13 +159,13 @@ export function registerToolCommands(
 
     const updateToolCmd = vscode.commands.registerCommand("pptb.tools.update", async (item?: InstalledToolTreeItem) => {
         if (!item?.tool) {
-            void vscode.window.showWarningMessage("No tool selected to update.");
+            vscode.window.showWarningMessage("No tool selected to update.");
             return;
         }
         const tool = item.tool;
         const registryTool = await toolRegistryManager.getToolById(tool.id);
         if (!registryTool) {
-            void vscode.window.showErrorMessage(`"${tool.name}" could not be found in the registry.`);
+            vscode.window.showErrorMessage(`"${tool.name}" could not be found in the registry.`);
             return;
         }
         try {
@@ -175,7 +177,7 @@ export function registerToolCommands(
                 },
                 (progress) => toolManager.updateTool(registryTool, (message) => progress.report({ message })),
             );
-            void vscode.window.showInformationMessage(`"${tool.name}" updated to v${registryTool.version}.`);
+            vscode.window.showInformationMessage(`"${tool.name}" updated to v${registryTool.version}.`);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             const action = await vscode.window.showErrorMessage(`Update failed: ${msg}`, "Report Bug");
@@ -190,7 +192,7 @@ export function registerToolCommands(
     const updateAllToolsCmd = vscode.commands.registerCommand("pptb.tools.updateAll", async () => {
         const toolsToUpdate = installedToolsProvider.getToolsWithUpdates();
         if (toolsToUpdate.length === 0) {
-            void vscode.window.showInformationMessage("All tools are up to date.");
+            vscode.window.showInformationMessage("All tools are up to date.");
             return;
         }
 
@@ -222,9 +224,9 @@ export function registerToolCommands(
         );
 
         if (failures.length === 0) {
-            void vscode.window.showInformationMessage(`${succeeded} tool${succeeded === 1 ? "" : "s"} updated successfully.`);
+            vscode.window.showInformationMessage(`${succeeded} tool${succeeded === 1 ? "" : "s"} updated successfully.`);
         } else {
-            void vscode.window.showWarningMessage(`${succeeded} of ${toolsToUpdate.length} tool(s) updated. Failed: ${failures.join(", ")}.`);
+            vscode.window.showWarningMessage(`${succeeded} of ${toolsToUpdate.length} tool(s) updated. Failed: ${failures.join(", ")}.`);
         }
         installedToolsProvider.invalidateUpdateCache();
     });
@@ -331,6 +333,7 @@ export function registerToolCommands(
     return [
         refreshInstalledCmd,
         showInstalledDetailsCmd,
+        toolFeedbackCmd,
         uninstallToolCmd,
         refreshMarketplaceCmd,
         showMarketplaceDetailsCmd,
