@@ -142,6 +142,7 @@ export class ToolRegistryManager {
             // string, which breaks down once it's widened to `string` here — that's fine
             // since we parse rows manually via `mapRow` regardless of the inferred type.
             let q = this.client!.from("tools").select(selectColumns, { count: "exact" }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            q = q.eq("status", "active");
             q = q.range(from, to);
             if (category) {
                 q = q.eq("category", category);
@@ -206,7 +207,7 @@ export class ToolRegistryManager {
             return map;
         }
 
-        const { data, error } = await this.client.from("tools").select("id, tool_analytics(downloads,rating,mau)").in("id", toolIds);
+        const { data, error } = await this.client.from("tools").select("id, tool_analytics(downloads,rating,mau)").in("id", toolIds).eq("status", "active");
 
         if (error) {
             this.output.appendLine(`[Registry] getAnalytics error: ${error.message}`);
@@ -239,7 +240,7 @@ export class ToolRegistryManager {
             return map;
         }
 
-        const { data, error } = await this.client.from("tools").select("id, version").in("id", toolIds);
+        const { data, error } = await this.client.from("tools").select("id, version").in("id", toolIds).eq("status", "active");
 
         if (error) {
             this.output.appendLine(`[Registry] getLatestVersions error: ${error.message}`);
@@ -266,9 +267,14 @@ export class ToolRegistryManager {
             return null;
         }
 
-        let { data, error } = await this.client.from("tools").select("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name))").eq("id", id).single();
+        let { data, error } = await this.client
+            .from("tools")
+            .select("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name))")
+            .eq("id", id)
+            .eq("status", "active")
+            .single();
         if (error) {
-            ({ data, error } = await this.client.from("tools").select("*").eq("id", id).single());
+            ({ data, error } = await this.client.from("tools").select("*").eq("id", id).eq("status", "active").single());
         }
 
         if (error || !data) {
@@ -335,7 +341,7 @@ export class ToolRegistryManager {
 
         // Select all columns; we filter capability tags client-side to avoid
         // column-name guessing issues.
-        const { data, error } = await this.client.from("tools").select("*");
+        const { data, error } = await this.client.from("tools").select("*").eq("status", "active");
 
         if (error) {
             this.output.appendLine(`[Registry] getKnownCapabilityTags error: ${error.message}`);
@@ -369,7 +375,7 @@ export class ToolRegistryManager {
             return [];
         }
         try {
-            const { data, error } = await this.client.from("tools").select("icon");
+            const { data, error } = await this.client.from("tools").select("icon").eq("status", "active");
             if (error || !data) {
                 return [];
             }
