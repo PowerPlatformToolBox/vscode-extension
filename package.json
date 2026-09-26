@@ -379,16 +379,6 @@
             ],
             "view/item/context": [
                 {
-                    "command": "pptb.tools.showDetails",
-                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-                    "group": "2_details@1"
-                },
-                {
-                    "command": "pptb.tools.feedback",
-                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-                    "group": "3_support@1"
-                },
-                {
                     "command": "pptb.connections.connect",
                     "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
                     "group": "inline@1"
@@ -407,6 +397,11 @@
                     "command": "pptb.connections.connect",
                     "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
                     "group": "1_connection@1"
+                },
+                {
+                    "command": "pptb.connections.disconnect",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.active/",
+                    "group": "1_connection@2"
                 },
                 {
                     "command": "pptb.connections.openEnvironment",
@@ -469,9 +464,14 @@
                     "group": "1_action@3"
                 },
                 {
-                    "command": "pptb.tools.uninstall",
+                    "command": "pptb.tools.showDetails",
                     "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-                    "group": "4_delete@1"
+                    "group": "2_details@1"
+                },
+                {
+                    "command": "pptb.tools.feedback",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "2_details@2"
                 },
                 {
                     "command": "pptb.tools.revokeCspConsent",
@@ -479,13 +479,18 @@
                     "group": "3_manage@1"
                 },
                 {
-                    "command": "pptb.marketplace.showDetails",
-                    "when": "view == pptb.marketplaceView && viewItem =~ /^pptb\\.marketplaceTool/",
-                    "group": "2_details@1"
+                    "command": "pptb.tools.uninstall",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "4_delete@1"
                 },
                 {
                     "command": "pptb.marketplace.install",
                     "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pptb.marketplace.uninstall",
+                    "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
                     "group": "inline@1"
                 },
                 {
@@ -494,9 +499,9 @@
                     "group": "1_action@1"
                 },
                 {
-                    "command": "pptb.marketplace.uninstall",
-                    "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
-                    "group": "inline@1"
+                    "command": "pptb.marketplace.showDetails",
+                    "when": "view == pptb.marketplaceView && viewItem =~ /^pptb\\.marketplaceTool/",
+                    "group": "2_details@1"
                 },
                 {
                     "command": "pptb.marketplace.uninstall",
