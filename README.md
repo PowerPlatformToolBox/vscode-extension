@@ -14,6 +14,7 @@ You can report issues and submit ideas without leaving VS Code:
 - Run **PPTB: Request a Feature** to open the feature request form.
 - Run **PPTB: Open Issue Tracker** to browse existing issues.
 - Run **PPTB: Join PPTB Discord** to get support from the team.
+- Use **Tool Feedback** from an installed tool's context menu to open a pre-filled issue in the tool's repository. The issue includes the tool version and relevant VS Code environment details.
 
 Repository: https://github.com/PowerPlatformToolBox/vscode-extension
 

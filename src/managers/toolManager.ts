@@ -40,6 +40,8 @@ export interface Tool {
     executableRelativePath?: string;
     /** Category groupings for this tool (e.g. "CLI", "DevOps"). */
     categories?: string[];
+    /** Source repository or support URL for the tool. */
+    repository?: string;
     /** Declared CSP exceptions requiring user consent before being applied to the tool's webview. */
     cspExceptions?: CspExceptions;
 }
@@ -74,6 +76,22 @@ function parseCategoriesFromPackage(pkg: Record<string, unknown> | null): string
     }
     const single = str(pkg["category"]);
     return single ? [single] : undefined;
+}
+
+/** Read a repository URL from either a string or the npm package.json object form. */
+function parseRepositoryFromPackage(pkg: Record<string, unknown> | null): string | undefined {
+    if (!pkg) {
+        return undefined;
+    }
+    const repository = pkg["repository"];
+    if (typeof repository === "string" && repository.length > 0) {
+        return repository;
+    }
+    if (repository && typeof repository === "object" && "url" in repository) {
+        const url = (repository as { url?: unknown }).url;
+        return typeof url === "string" && url.length > 0 ? url : undefined;
+    }
+    return undefined;
 }
 
 // ── ToolManager ───────────────────────────────────────────────────────────────
@@ -205,6 +223,7 @@ export class ToolManager implements vscode.Disposable {
             description: (pkg && str(pkg["description"])) ?? tool.description,
             version: (pkg && str(pkg["version"])) ?? tool.version,
             categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
+            repository: parseRepositoryFromPackage(pkg) ?? tool.repository,
             cspExceptions: normalizeCspExceptions(pkg?.["cspExceptions"]) ?? tool.cspExceptions,
         };
     }
@@ -298,6 +317,7 @@ export class ToolManager implements vscode.Disposable {
             description: (pkg && str(pkg["description"])) ?? tool.description,
             version: (pkg && str(pkg["version"])) ?? tool.version,
             categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
+            repository: parseRepositoryFromPackage(pkg) ?? tool.repository,
             installedAt: new Date().toISOString(),
             toolPath: toolDir,
         };
