@@ -1,541 +1,552 @@
 {
-  "name": "power-platform-toolbox",
-  "displayName": "%extension.displayName%",
-  "description": "%extension.description%",
-  "version": "1.0.1",
-  "publisher": "PowerPlatformToolBox",
-  "license": "GPL-3.0",
-  "icon": "resources/icon.png",
-  "galleryBanner": {
-    "color": "#742774",
-    "theme": "dark"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/PowerPlatformToolBox/vscode-extension"
-  },
-  "homepage": "https://github.com/PowerPlatformToolBox/vscode-extension#readme",
-  "bugs": {
-    "url": "https://github.com/PowerPlatformToolBox/vscode-extension/issues"
-  },
-  "keywords": [
-    "pptb",
-    "power platform",
-    "dataverse",
-    "dynamics 365",
-    "power apps",
-    "connections",
-    "toolbox"
-  ],
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "pptb-explorer",
-          "title": "%viewsContainer.pptbExplorer.title%",
-          "icon": "./resources/icon.svg"
-        }
-      ]
+    "name": "power-platform-toolbox",
+    "displayName": "%extension.displayName%",
+    "description": "%extension.description%",
+    "version": "1.0.1",
+    "publisher": "PowerPlatformToolBox",
+    "license": "GPL-3.0",
+    "icon": "resources/icon.png",
+    "galleryBanner": {
+        "color": "#742774",
+        "theme": "dark"
     },
-    "views": {
-      "pptb-explorer": [
-        {
-          "id": "pptb.connectionsView",
-          "name": "%view.connectionsView.name%",
-          "icon": "./resources/icon.svg"
-        },
-        {
-          "id": "pptb.installedToolsView",
-          "name": "%view.installedToolsView.name%",
-          "icon": "./resources/icon.svg"
-        },
-        {
-          "id": "pptb.marketplaceView",
-          "name": "%view.marketplaceView.name%",
-          "icon": "./resources/icon.svg"
-        }
-      ]
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/PowerPlatformToolBox/vscode-extension"
     },
-    "commands": [
-      {
-        "command": "pptb.connections.add",
-        "title": "%command.connections.add.title%",
-        "category": "%command.category%",
-        "icon": "$(add)"
-      },
-      {
-        "command": "pptb.connections.edit",
-        "title": "%command.connections.edit.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "pptb.connections.delete",
-        "title": "%command.connections.delete.title%",
-        "category": "%command.category%",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "pptb.connections.connect",
-        "title": "%command.connections.connect.title%",
-        "category": "%command.category%",
-        "icon": "$(plug)"
-      },
-      {
-        "command": "pptb.connections.disconnect",
-        "title": "%command.connections.disconnect.title%",
-        "category": "%command.category%",
-        "icon": "$(debug-disconnect)"
-      },
-      {
-        "command": "pptb.connections.test",
-        "title": "%command.connections.test.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "pptb.connections.refresh",
-        "title": "%command.connections.refresh.title%",
-        "category": "%command.category%",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "pptb.connections.export",
-        "title": "%command.connections.export.title%",
-        "category": "%command.category%",
-        "icon": "$(export)"
-      },
-      {
-        "command": "pptb.connections.import",
-        "title": "%command.connections.import.title%",
-        "category": "%command.category%",
-        "icon": "$(import)"
-      },
-      {
-        "command": "pptb.tools.refresh",
-        "title": "%command.tools.refresh.title%",
-        "category": "%command.category%",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "pptb.tools.sortAndFilter",
-        "title": "%command.tools.sortAndFilter.title%",
-        "category": "%command.category%",
-        "icon": "$(filter)"
-      },
-      {
-        "command": "pptb.tools.addFavorite",
-        "title": "%command.tools.addFavorite.title%",
-        "category": "%command.category%",
-        "icon": "$(star-empty)"
-      },
-      {
-        "command": "pptb.tools.removeFavorite",
-        "title": "%command.tools.removeFavorite.title%",
-        "category": "%command.category%",
-        "icon": "$(star-full)"
-      },
-      {
-        "command": "pptb.tools.uninstall",
-        "title": "%command.tools.uninstall.title%",
-        "category": "%command.category%",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "pptb.tools.update",
-        "title": "%command.tools.update.title%",
-        "category": "%command.category%",
-        "icon": "$(arrow-up)"
-      },
-      {
-        "command": "pptb.tools.updateAll",
-        "title": "%command.tools.updateAll.title%",
-        "category": "%command.category%",
-        "icon": "$(sync)"
-      },
-      {
-        "command": "pptb.tools.revokeCspConsent",
-        "title": "%command.tools.revokeCspConsent.title%",
-        "category": "%command.category%",
-        "icon": "$(shield)"
-      },
-      {
-        "command": "pptb.tools.managePermissions",
-        "title": "%command.tools.managePermissions.title%",
-        "category": "%command.category%",
-        "icon": "$(shield)"
-      },
-      {
-        "command": "pptb.marketplace.refresh",
-        "title": "%command.marketplace.refresh.title%",
-        "category": "%command.category%",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "pptb.marketplace.sortAndFilter",
-        "title": "%command.marketplace.sortAndFilter.title%",
-        "category": "%command.category%",
-        "icon": "$(filter)"
-      },
-      {
-        "command": "pptb.marketplace.install",
-        "title": "%command.marketplace.install.title%",
-        "category": "%command.category%",
-        "icon": "$(cloud-download)"
-      },
-      {
-        "command": "pptb.connections.openEnvironment",
-        "title": "%command.connections.openEnvironment.title%",
-        "category": "%command.category%",
-        "icon": "$(globe)"
-      },
-      {
-        "command": "pptb.connections.showDetails",
-        "title": "%command.connections.showDetails.title%",
-        "category": "%command.category%",
-        "icon": "$(edit)"
-      },
-      {
-        "command": "pptb.connections.forget",
-        "title": "%command.connections.forget.title%",
-        "category": "%command.category%"
-      },
-      {
-        "command": "pptb.tools.launch",
-        "title": "%command.tools.launch.title%",
-        "category": "%command.category%",
-        "icon": "$(run)"
-      },
-      {
-        "command": "pptb.tools.showDetails",
-        "title": "%command.tools.showDetails.title%",
-        "category": "%command.category%",
-        "icon": "$(info)"
-      },
-      {
-        "command": "pptb.tools.browse",
-        "title": "%command.tools.browse.title%",
-        "category": "%command.category%",
-        "icon": "$(list-flat)"
-      },
-      {
-        "command": "pptb.marketplace.uninstall",
-        "title": "%command.marketplace.uninstall.title%",
-        "category": "%command.category%",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "pptb.marketplace.browse",
-        "title": "%command.marketplace.browse.title%",
-        "category": "%command.category%",
-        "icon": "$(list-flat)"
-      },
-      {
-        "command": "pptb.marketplace.showDetails",
-        "title": "%command.marketplace.showDetails.title%",
-        "category": "%command.category%",
-        "icon": "$(info)"
-      },
-      {
-        "command": "pptb.help.reportBug",
-        "title": "%command.help.reportBug.title%",
-        "category": "%command.category%",
-        "icon": "$(bug)"
-      },
-      {
-        "command": "pptb.help.requestFeature",
-        "title": "%command.help.requestFeature.title%",
-        "category": "%command.category%",
-        "icon": "$(lightbulb)"
-      },
-      {
-        "command": "pptb.help.openIssues",
-        "title": "%command.help.openIssues.title%",
-        "category": "%command.category%",
-        "icon": "$(issues)"
-      },
-      {
-        "command": "pptb.help.joinDiscord",
-        "title": "%command.help.joinDiscord.title%",
-        "category": "%command.category%",
-        "icon": "$(comment-discussion)"
-      }
+    "homepage": "https://github.com/PowerPlatformToolBox/vscode-extension#readme",
+    "bugs": {
+        "url": "https://github.com/PowerPlatformToolBox/vscode-extension/issues"
+    },
+    "keywords": [
+        "pptb",
+        "power platform",
+        "dataverse",
+        "dynamics 365",
+        "power apps",
+        "connections",
+        "toolbox"
     ],
-    "menus": {
-      "editor/title": [
-        {
-          "command": "pptb.connections.add",
-          "when": "activeWebviewPanelId == pptb.connectionPanel"
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [],
+    "main": "./dist/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "pptb-explorer",
+                    "title": "%viewsContainer.pptbExplorer.title%",
+                    "icon": "./resources/icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "pptb-explorer": [
+                {
+                    "id": "pptb.connectionsView",
+                    "name": "%view.connectionsView.name%",
+                    "icon": "./resources/icon.svg"
+                },
+                {
+                    "id": "pptb.installedToolsView",
+                    "name": "%view.installedToolsView.name%",
+                    "icon": "./resources/icon.svg"
+                },
+                {
+                    "id": "pptb.marketplaceView",
+                    "name": "%view.marketplaceView.name%",
+                    "icon": "./resources/icon.svg"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "pptb.connections.add",
+                "title": "%command.connections.add.title%",
+                "category": "%command.category%",
+                "icon": "$(add)"
+            },
+            {
+                "command": "pptb.connections.edit",
+                "title": "%command.connections.edit.title%",
+                "category": "%command.category%"
+            },
+            {
+                "command": "pptb.connections.delete",
+                "title": "%command.connections.delete.title%",
+                "category": "%command.category%",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "pptb.connections.connect",
+                "title": "%command.connections.connect.title%",
+                "category": "%command.category%",
+                "icon": "$(plug)"
+            },
+            {
+                "command": "pptb.connections.disconnect",
+                "title": "%command.connections.disconnect.title%",
+                "category": "%command.category%",
+                "icon": "$(debug-disconnect)"
+            },
+            {
+                "command": "pptb.connections.test",
+                "title": "%command.connections.test.title%",
+                "category": "%command.category%"
+            },
+            {
+                "command": "pptb.connections.refresh",
+                "title": "%command.connections.refresh.title%",
+                "category": "%command.category%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "pptb.connections.export",
+                "title": "%command.connections.export.title%",
+                "category": "%command.category%",
+                "icon": "$(export)"
+            },
+            {
+                "command": "pptb.connections.import",
+                "title": "%command.connections.import.title%",
+                "category": "%command.category%",
+                "icon": "$(import)"
+            },
+            {
+                "command": "pptb.tools.refresh",
+                "title": "%command.tools.refresh.title%",
+                "category": "%command.category%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "pptb.tools.sortAndFilter",
+                "title": "%command.tools.sortAndFilter.title%",
+                "category": "%command.category%",
+                "icon": "$(filter)"
+            },
+            {
+                "command": "pptb.tools.addFavorite",
+                "title": "%command.tools.addFavorite.title%",
+                "category": "%command.category%",
+                "icon": "$(star-empty)"
+            },
+            {
+                "command": "pptb.tools.removeFavorite",
+                "title": "%command.tools.removeFavorite.title%",
+                "category": "%command.category%",
+                "icon": "$(star-full)"
+            },
+            {
+                "command": "pptb.tools.uninstall",
+                "title": "%command.tools.uninstall.title%",
+                "category": "%command.category%",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "pptb.tools.update",
+                "title": "%command.tools.update.title%",
+                "category": "%command.category%",
+                "icon": "$(arrow-up)"
+            },
+            {
+                "command": "pptb.tools.updateAll",
+                "title": "%command.tools.updateAll.title%",
+                "category": "%command.category%",
+                "icon": "$(sync)"
+            },
+            {
+                "command": "pptb.tools.revokeCspConsent",
+                "title": "%command.tools.revokeCspConsent.title%",
+                "category": "%command.category%",
+                "icon": "$(shield)"
+            },
+            {
+                "command": "pptb.tools.managePermissions",
+                "title": "%command.tools.managePermissions.title%",
+                "category": "%command.category%",
+                "icon": "$(shield)"
+            },
+            {
+                "command": "pptb.marketplace.refresh",
+                "title": "%command.marketplace.refresh.title%",
+                "category": "%command.category%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "pptb.marketplace.sortAndFilter",
+                "title": "%command.marketplace.sortAndFilter.title%",
+                "category": "%command.category%",
+                "icon": "$(filter)"
+            },
+            {
+                "command": "pptb.marketplace.install",
+                "title": "%command.marketplace.install.title%",
+                "category": "%command.category%",
+                "icon": "$(cloud-download)"
+            },
+            {
+                "command": "pptb.connections.openEnvironment",
+                "title": "%command.connections.openEnvironment.title%",
+                "category": "%command.category%",
+                "icon": "$(globe)"
+            },
+            {
+                "command": "pptb.connections.showDetails",
+                "title": "%command.connections.showDetails.title%",
+                "category": "%command.category%",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "pptb.connections.forget",
+                "title": "%command.connections.forget.title%",
+                "category": "%command.category%"
+            },
+            {
+                "command": "pptb.tools.launch",
+                "title": "%command.tools.launch.title%",
+                "category": "%command.category%",
+                "icon": "$(run)"
+            },
+            {
+                "command": "pptb.tools.showDetails",
+                "title": "%command.tools.showDetails.title%",
+                "category": "%command.category%",
+                "icon": "$(info)"
+            },
+            {
+                "command": "pptb.tools.feedback",
+                "title": "%command.tools.feedback.title%",
+                "category": "%command.category%",
+                "icon": "$(comment-discussion)"
+            },
+            {
+                "command": "pptb.tools.browse",
+                "title": "%command.tools.browse.title%",
+                "category": "%command.category%",
+                "icon": "$(list-flat)"
+            },
+            {
+                "command": "pptb.marketplace.uninstall",
+                "title": "%command.marketplace.uninstall.title%",
+                "category": "%command.category%",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "pptb.marketplace.browse",
+                "title": "%command.marketplace.browse.title%",
+                "category": "%command.category%",
+                "icon": "$(list-flat)"
+            },
+            {
+                "command": "pptb.marketplace.showDetails",
+                "title": "%command.marketplace.showDetails.title%",
+                "category": "%command.category%",
+                "icon": "$(info)"
+            },
+            {
+                "command": "pptb.help.reportBug",
+                "title": "%command.help.reportBug.title%",
+                "category": "%command.category%",
+                "icon": "$(bug)"
+            },
+            {
+                "command": "pptb.help.requestFeature",
+                "title": "%command.help.requestFeature.title%",
+                "category": "%command.category%",
+                "icon": "$(lightbulb)"
+            },
+            {
+                "command": "pptb.help.openIssues",
+                "title": "%command.help.openIssues.title%",
+                "category": "%command.category%",
+                "icon": "$(issues)"
+            },
+            {
+                "command": "pptb.help.joinDiscord",
+                "title": "%command.help.joinDiscord.title%",
+                "category": "%command.category%",
+                "icon": "$(comment-discussion)"
+            }
+        ],
+        "menus": {
+            "editor/title": [
+                {
+                    "command": "pptb.connections.add",
+                    "when": "activeWebviewPanelId == pptb.connectionPanel"
+                }
+            ],
+            "view/title": [
+                {
+                    "command": "pptb.connections.add",
+                    "when": "view == pptb.connectionsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.connections.refresh",
+                    "when": "view == pptb.connectionsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.connections.export",
+                    "when": "view == pptb.connectionsView",
+                    "group": "2_importexport@1"
+                },
+                {
+                    "command": "pptb.connections.import",
+                    "when": "view == pptb.connectionsView",
+                    "group": "2_importexport@2"
+                },
+                {
+                    "command": "pptb.tools.browse",
+                    "when": "view == pptb.installedToolsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.tools.updateAll",
+                    "when": "view == pptb.installedToolsView && pptb.hasToolUpdates",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.tools.managePermissions",
+                    "when": "view == pptb.installedToolsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.tools.refresh",
+                    "when": "view == pptb.installedToolsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.tools.sortAndFilter",
+                    "when": "view == pptb.installedToolsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.marketplace.browse",
+                    "when": "view == pptb.marketplaceView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.marketplace.refresh",
+                    "when": "view == pptb.marketplaceView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.marketplace.sortAndFilter",
+                    "when": "view == pptb.marketplaceView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "pptb.help.reportBug",
+                    "when": "view == pptb.connectionsView",
+                    "group": "3_help@1"
+                },
+                {
+                    "command": "pptb.help.requestFeature",
+                    "when": "view == pptb.connectionsView",
+                    "group": "3_help@2"
+                },
+                {
+                    "command": "pptb.help.reportBug",
+                    "when": "view == pptb.installedToolsView",
+                    "group": "3_help@1"
+                },
+                {
+                    "command": "pptb.help.requestFeature",
+                    "when": "view == pptb.installedToolsView",
+                    "group": "3_help@2"
+                },
+                {
+                    "command": "pptb.help.reportBug",
+                    "when": "view == pptb.marketplaceView",
+                    "group": "3_help@1"
+                },
+                {
+                    "command": "pptb.help.requestFeature",
+                    "when": "view == pptb.marketplaceView",
+                    "group": "3_help@2"
+                },
+                {
+                    "command": "pptb.help.joinDiscord",
+                    "when": "view == pptb.marketplaceView",
+                    "group": "3_help@3"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "pptb.tools.showDetails",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "2_details@1"
+                },
+                {
+                    "command": "pptb.tools.feedback",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "3_support@1"
+                },
+                {
+                    "command": "pptb.connections.connect",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pptb.connections.disconnect",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.active/",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pptb.connections.delete",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "pptb.connections.connect",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
+                    "group": "1_connection@1"
+                },
+                {
+                    "command": "pptb.connections.openEnvironment",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
+                    "group": "2_manage@1"
+                },
+                {
+                    "command": "pptb.connections.showDetails",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
+                    "group": "2_manage@2"
+                },
+                {
+                    "command": "pptb.connections.forget",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)\\.remembered$/",
+                    "group": "2_manage@3"
+                },
+                {
+                    "command": "pptb.connections.delete",
+                    "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
+                    "group": "3_delete@1"
+                },
+                {
+                    "command": "pptb.tools.launch",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pptb.tools.addFavorite",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "pptb.tools.removeFavorite",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "pptb.tools.update",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
+                    "group": "inline@3"
+                },
+                {
+                    "command": "pptb.tools.launch",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "1_action@1"
+                },
+                {
+                    "command": "pptb.tools.addFavorite",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
+                    "group": "1_action@2"
+                },
+                {
+                    "command": "pptb.tools.removeFavorite",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
+                    "group": "1_action@2"
+                },
+                {
+                    "command": "pptb.tools.update",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
+                    "group": "1_action@3"
+                },
+                {
+                    "command": "pptb.tools.uninstall",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "4_delete@1"
+                },
+                {
+                    "command": "pptb.tools.revokeCspConsent",
+                    "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
+                    "group": "3_manage@1"
+                },
+                {
+                    "command": "pptb.marketplace.showDetails",
+                    "when": "view == pptb.marketplaceView && viewItem =~ /^pptb\\.marketplaceTool/",
+                    "group": "2_details@1"
+                },
+                {
+                    "command": "pptb.marketplace.install",
+                    "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pptb.marketplace.install",
+                    "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
+                    "group": "1_action@1"
+                },
+                {
+                    "command": "pptb.marketplace.uninstall",
+                    "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "pptb.marketplace.uninstall",
+                    "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
+                    "group": "4_delete@1"
+                }
+            ]
         }
-      ],
-      "view/title": [
-        {
-          "command": "pptb.connections.add",
-          "when": "view == pptb.connectionsView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.connections.refresh",
-          "when": "view == pptb.connectionsView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.connections.export",
-          "when": "view == pptb.connectionsView",
-          "group": "2_importexport@1"
-        },
-        {
-          "command": "pptb.connections.import",
-          "when": "view == pptb.connectionsView",
-          "group": "2_importexport@2"
-        },
-        {
-          "command": "pptb.tools.browse",
-          "when": "view == pptb.installedToolsView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.tools.updateAll",
-          "when": "view == pptb.installedToolsView && pptb.hasToolUpdates",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.tools.managePermissions",
-          "when": "view == pptb.installedToolsView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.tools.refresh",
-          "when": "view == pptb.installedToolsView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.tools.sortAndFilter",
-          "when": "view == pptb.installedToolsView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.marketplace.browse",
-          "when": "view == pptb.marketplaceView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.marketplace.refresh",
-          "when": "view == pptb.marketplaceView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.marketplace.sortAndFilter",
-          "when": "view == pptb.marketplaceView",
-          "group": "navigation"
-        },
-        {
-          "command": "pptb.help.reportBug",
-          "when": "view == pptb.connectionsView",
-          "group": "3_help@1"
-        },
-        {
-          "command": "pptb.help.requestFeature",
-          "when": "view == pptb.connectionsView",
-          "group": "3_help@2"
-        },
-        {
-          "command": "pptb.help.reportBug",
-          "when": "view == pptb.installedToolsView",
-          "group": "3_help@1"
-        },
-        {
-          "command": "pptb.help.requestFeature",
-          "when": "view == pptb.installedToolsView",
-          "group": "3_help@2"
-        },
-        {
-          "command": "pptb.help.reportBug",
-          "when": "view == pptb.marketplaceView",
-          "group": "3_help@1"
-        },
-        {
-          "command": "pptb.help.requestFeature",
-          "when": "view == pptb.marketplaceView",
-          "group": "3_help@2"
-        },
-        {
-          "command": "pptb.help.joinDiscord",
-          "when": "view == pptb.marketplaceView",
-          "group": "3_help@3"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "pptb.tools.showDetails",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "2_details@1"
-        },
-        {
-          "command": "pptb.connections.connect",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
-          "group": "inline@1"
-        },
-        {
-          "command": "pptb.connections.disconnect",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.active/",
-          "group": "inline@1"
-        },
-        {
-          "command": "pptb.connections.delete",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
-          "group": "inline@2"
-        },
-        {
-          "command": "pptb.connections.connect",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
-          "group": "1_connection@1"
-        },
-        {
-          "command": "pptb.connections.openEnvironment",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
-          "group": "2_manage@1"
-        },
-        {
-          "command": "pptb.connections.showDetails",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
-          "group": "2_manage@2"
-        },
-        {
-          "command": "pptb.connections.forget",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)\\.remembered$/",
-          "group": "2_manage@3"
-        },
-        {
-          "command": "pptb.connections.delete",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)/",
-          "group": "3_delete@1"
-        },
-        {
-          "command": "pptb.tools.launch",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "inline@1"
-        },
-        {
-          "command": "pptb.tools.addFavorite",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
-          "group": "inline@2"
-        },
-        {
-          "command": "pptb.tools.removeFavorite",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
-          "group": "inline@2"
-        },
-        {
-          "command": "pptb.tools.update",
-          "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
-          "group": "inline@3"
-        },
-        {
-          "command": "pptb.tools.launch",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "1_action@1"
-        },
-        {
-          "command": "pptb.tools.addFavorite",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool(\\.updateAvailable)?$/",
-          "group": "1_action@2"
-        },
-        {
-          "command": "pptb.tools.removeFavorite",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool\\.favorite(\\.updateAvailable)?$/",
-          "group": "1_action@2"
-        },
-        {
-          "command": "pptb.tools.update",
-          "when": "view == pptb.installedToolsView && viewItem =~ /\\.updateAvailable$/",
-          "group": "1_action@3"
-        },
-        {
-          "command": "pptb.tools.uninstall",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "4_delete@1"
-        },
-        {
-          "command": "pptb.tools.revokeCspConsent",
-          "when": "view == pptb.installedToolsView && viewItem =~ /^pptb\\.installedTool($|\\.)/",
-          "group": "3_manage@1"
-        },
-        {
-          "command": "pptb.marketplace.showDetails",
-          "when": "view == pptb.marketplaceView && viewItem =~ /^pptb\\.marketplaceTool/",
-          "group": "2_details@1"
-        },
-        {
-          "command": "pptb.marketplace.install",
-          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
-          "group": "inline@1"
-        },
-        {
-          "command": "pptb.marketplace.install",
-          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool",
-          "group": "1_action@1"
-        },
-        {
-          "command": "pptb.marketplace.uninstall",
-          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
-          "group": "inline@1"
-        },
-        {
-          "command": "pptb.marketplace.uninstall",
-          "when": "view == pptb.marketplaceView && viewItem == pptb.marketplaceTool.installed",
-          "group": "4_delete@1"
-        }
-      ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run package",
+        "compile": "webpack",
+        "watch": "webpack --watch",
+        "package": "webpack --mode production --devtool false",
+        "publish:preview": "npx @vscode/vsce publish --pre-release",
+        "publish": "npx @vscode/vsce publish",
+        "compile-tests": "tsc -p . --outDir out",
+        "pretest": "npm run compile-tests",
+        "lint": "eslint src --ext .ts,.tsx",
+        "test": "node ./out/test/runTest.js",
+        "format": "prettier --write src"
+    },
+    "dependencies": {
+        "@azure/msal-node": "^3.8.10",
+        "@pptb/types": "1.2.5",
+        "@supabase/supabase-js": "^2.108.2",
+        "axios": "^1.19.0",
+        "dompurify": "^3.2.6",
+        "marked": "^16.1.2",
+        "uuid": "^14.0.2"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "@types/uuid": "^10.0.0",
+        "@types/vscode": "^1.85.0",
+        "@types/webpack-env": "^1.18.4",
+        "@typescript-eslint/eslint-plugin": "^7.18.0",
+        "@typescript-eslint/parser": "^7.18.0",
+        "css-loader": "^7.1.2",
+        "dotenv": "^17.4.2",
+        "eslint": "^8.57.1",
+        "prettier": "3.9.3",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "style-loader": "^4.0.0",
+        "ts-loader": "^9.5.1",
+        "typescript": "^5.3.3",
+        "webpack": "^5.90.1",
+        "webpack-cli": "^5.1.4"
     }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "webpack",
-    "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool false",
-    "publish:preview": "npx @vscode/vsce publish --pre-release",
-    "publish": "npx @vscode/vsce publish",
-    "compile-tests": "tsc -p . --outDir out",
-    "pretest": "npm run compile-tests",
-    "lint": "eslint src --ext .ts,.tsx",
-    "test": "node ./out/test/runTest.js",
-    "format": "prettier --write src"
-  },
-  "dependencies": {
-    "@azure/msal-node": "^3.8.10",
-    "@pptb/types": "1.2.5",
-    "@supabase/supabase-js": "^2.108.2",
-    "axios": "^1.19.0",
-    "uuid": "^14.0.2",
-    "dompurify": "^3.2.6",
-    "marked": "^16.1.2"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@types/uuid": "^10.0.0",
-    "@types/vscode": "^1.85.0",
-    "@types/webpack-env": "^1.18.4",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "css-loader": "^7.1.2",
-    "dotenv": "^17.4.2",
-    "eslint": "^8.57.1",
-    "prettier": "3.9.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "style-loader": "^4.0.0",
-    "ts-loader": "^9.5.1",
-    "typescript": "^5.3.3",
-    "webpack": "^5.90.1",
-    "webpack-cli": "^5.1.4"
-  }
 }

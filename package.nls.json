@@ -29,6 +29,7 @@
     "command.tools.managePermissions.title": "Review CSP Permissions",
     "command.tools.launch.title": "Launch Tool",
     "command.tools.showDetails.title": "Show Tool Details",
+    "command.tools.feedback.title": "Tool Feedback",
     "command.tools.browse.title": "Browse Installed Tools",
     "command.marketplace.refresh.title": "Refresh Marketplace",
     "command.marketplace.sortAndFilter.title": "Sort & Filter Marketplace",
