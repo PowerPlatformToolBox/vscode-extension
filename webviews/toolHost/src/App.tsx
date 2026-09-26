@@ -22,6 +22,9 @@ interface InstalledTool {
     hasUpdate?: boolean;
     latestVersion?: string;
     isUpdating?: boolean;
+    downloads?: number;
+    rating?: number;
+    mau?: number;
 }
 
 interface RegistryTool {
@@ -34,6 +37,10 @@ interface RegistryTool {
     isVerified?: boolean;
     categories?: string[];
     icon?: ToolIconSource;
+    downloads?: number;
+    rating?: number;
+    mau?: number;
+    repository?: string;
 }
 
 type InstalledSortOption = "favorite" | "name-asc" | "name-desc" | "popularity" | "rating" | "downloads" | "verified";
@@ -177,9 +184,9 @@ const listArea: React.CSSProperties = {
 
 const cardGrid: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
-    gap: 12,
-    padding: "12px",
+    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+    gap: 16,
+    padding: "16px",
     alignContent: "start",
 };
 
@@ -187,11 +194,12 @@ const card: React.CSSProperties = {
     display: "flex",
     flexDirection: "column",
     gap: 8,
-    padding: 12,
-    borderRadius: 6,
+    padding: 16,
+    borderRadius: 8,
     border: "1px solid var(--vscode-panel-border)",
     background: "var(--vscode-sideBar-background, var(--vscode-editor-background))",
     transition: "border-color 0.1s ease, box-shadow 0.1s ease",
+    cursor: "pointer",
 };
 
 const cardHover: React.CSSProperties = {
@@ -270,6 +278,10 @@ const clampText: React.CSSProperties = {
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
 };
+
+const metricRow: React.CSSProperties = { display: "flex", gap: 12, color: "var(--vscode-descriptionForeground)", fontSize: 11 };
+const repoLink: React.CSSProperties = { color: "var(--vscode-textLink-foreground)", background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11 };
+const installedStatus: React.CSSProperties = { ...hint, color: "var(--vscode-testing-iconPassed, #73c991)", whiteSpace: "nowrap", flexShrink: 0 };
 
 // ── Tab button ─────────────────────────────────────────────────────────────────
 
@@ -419,6 +431,8 @@ function InstalledToolsTab(): React.ReactElement {
         vscodeApi.postMessage({ type: "toggle-favorite", toolId: tool.id });
     };
 
+    const openDetails = (tool: InstalledTool) => vscodeApi.postMessage({ type: "open-tool-details", toolId: tool.id });
+
     const changeSort = (value: InstalledSortOption) => {
         setSort(value);
         vscodeApi.postMessage({ type: "set-installed-sort", sort: value });
@@ -494,7 +508,7 @@ function InstalledToolsTab(): React.ReactElement {
                             const isFavorite = favorites.has(tool.id);
                             const contributorText = formatContributors(tool.contributors) || tool.publisher;
                             return (
-                                <div key={tool.id} style={{ ...card, ...(isHovered ? cardHover : {}) }} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)}>
+                                <div key={tool.id} style={{ ...card, ...(isHovered ? cardHover : {}) }} onClick={() => openDetails(tool)} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)} role="button" tabIndex={0}>
                                     <div style={cardHeader}>
                                         <ToolIcon icon={tool.icon} name={tool.name} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -508,7 +522,7 @@ function InstalledToolsTab(): React.ReactElement {
                                         </div>
                                         <button
                                             style={{ ...favoriteBtn, color: isFavorite ? "var(--vscode-charts-yellow, #e2c08d)" : favoriteBtn.color }}
-                                            onClick={() => toggleFavorite(tool)}
+                                             onClick={(event) => { event.stopPropagation(); toggleFavorite(tool); }}
                                             title={isFavorite ? "Remove from Favorites" : "Mark as Favorite"}
                                             aria-label={isFavorite ? "Remove from Favorites" : "Mark as Favorite"}
                                         >
@@ -516,25 +530,26 @@ function InstalledToolsTab(): React.ReactElement {
                                         </button>
                                     </div>
                                     <div style={{ ...hint, ...clampText, minHeight: 30 }}>{tool.description || " "}</div>
+                                    {(tool.rating !== undefined || tool.mau !== undefined || tool.downloads !== undefined) && <div style={metricRow}>{tool.rating !== undefined && <span>★ {tool.rating.toFixed(1)}</span>}{tool.mau !== undefined && <span>{tool.mau.toLocaleString()} MAU</span>}{tool.downloads !== undefined && <span>{tool.downloads.toLocaleString()} downloads</span>}</div>}
                                     {tool.hasUpdate && !tool.isUpdating && <div style={{ ...hint, color: "var(--vscode-charts-blue, #0078d4)" }}>v{tool.latestVersion} update available</div>}
                                     {tool.isUpdating && <div style={hint}>Updating…</div>}
                                     <div style={cardFooter}>
-                                        {tool.categories?.length ? <span style={categoryChip}>{tool.categories.join(", ")}</span> : null}
+                                         {tool.categories?.length ? <span style={categoryChip} title={tool.categories.join(", ")}>{tool.categories.join(", ")}</span> : null}
                                         <span style={{ flex: 1 }} />
-                                        <button style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px" }} onClick={() => uninstallTool(tool)} disabled={tool.isUpdating}>
+                                         <button style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px" }} onClick={(event) => { event.stopPropagation(); uninstallTool(tool); }} disabled={tool.isUpdating}>
                                             Uninstall
                                         </button>
                                         {tool.hasUpdate && (
                                             <button
                                                 style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }}
-                                                onClick={() => updateTool(tool)}
+                                                 onClick={(event) => { event.stopPropagation(); updateTool(tool); }}
                                                 disabled={tool.isUpdating}
                                                 title={`Update to v${tool.latestVersion}`}
                                             >
                                                 {tool.isUpdating ? "Updating…" : "Update"}
                                             </button>
                                         )}
-                                        <button style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }} onClick={() => launchTool(tool)} disabled={tool.isUpdating}>
+                                         <button style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px" }} onClick={(event) => { event.stopPropagation(); launchTool(tool); }} disabled={tool.isUpdating}>
                                             Launch
                                         </button>
                                     </div>
@@ -638,6 +653,9 @@ function MarketplaceTab(): React.ReactElement {
         vscodeApi.postMessage({ type: "uninstall-tool", toolId: tool.id });
     };
 
+    const openDetails = (tool: RegistryTool) => vscodeApi.postMessage({ type: "open-tool-details", toolId: tool.id });
+    const openRepository = (event: React.MouseEvent, url: string) => { event.stopPropagation(); vscodeApi.postMessage({ type: "open-link", url }); };
+
     const changeSort = (value: MarketplaceSortOption) => {
         setSort(value);
         vscodeApi.postMessage({ type: "set-marketplace-sort", sort: value });
@@ -701,7 +719,7 @@ function MarketplaceTab(): React.ReactElement {
                             const contributorText = formatContributors(tool.contributors) || tool.publisher;
                             const subtitle = contributorText ? `${contributorText} · v${tool.version}` : `v${tool.version}`;
                             return (
-                                <div key={tool.id} style={{ ...card, ...(isHovered ? cardHover : {}) }} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)}>
+                                <div key={tool.id} style={{ ...card, ...(isHovered ? cardHover : {}) }} onClick={() => openDetails(tool)} onMouseEnter={() => setHoveredId(tool.id)} onMouseLeave={() => setHoveredId(null)} role="button" tabIndex={0}>
                                     <div style={cardHeader}>
                                         <ToolIcon icon={tool.icon} name={tool.name} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -713,19 +731,25 @@ function MarketplaceTab(): React.ReactElement {
                                         </div>
                                     </div>
                                     <div style={{ ...hint, ...clampText, minHeight: 30 }}>{tool.description || " "}</div>
+                                    {(tool.rating !== undefined || tool.mau !== undefined || tool.downloads !== undefined || tool.repository) && <div style={metricRow}>
+                                        {tool.rating !== undefined && <span>★ {tool.rating.toFixed(1)}</span>}
+                                        {tool.mau !== undefined && <span>{tool.mau.toLocaleString()} MAU</span>}
+                                        {tool.downloads !== undefined && <span>{tool.downloads.toLocaleString()} downloads</span>}
+                                        {tool.repository && <button style={repoLink} onClick={(event) => openRepository(event, tool.repository!)}>Repository</button>}
+                                    </div>}
                                     <div style={cardFooter}>
-                                        {tool.categories?.length ? <span style={categoryChip}>{tool.categories.join(", ")}</span> : null}
-                                        {isInstalled && <span style={{ ...hint, color: "var(--vscode-testing-iconPassed, #73c991)" }}>✓ Installed</span>}
+                                         {tool.categories?.length ? <span style={categoryChip} title={tool.categories.join(", ")}>{tool.categories.join(", ")}</span> : null}
                                         <span style={{ flex: 1 }} />
+                                        {isInstalled && <span style={installedStatus}>✓ Installed</span>}
                                         {isInstalled ? (
-                                            <button disabled={isBusy} style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px", opacity: isBusy ? 0.5 : 1 }} onClick={() => uninstallTool(tool)}>
+                                             <button disabled={isBusy} style={{ ...secondaryBtn, fontSize: 11, padding: "5px 10px", opacity: isBusy ? 0.5 : 1 }} onClick={(event) => { event.stopPropagation(); uninstallTool(tool); }}>
                                                 {isBusy ? "…" : "Uninstall"}
                                             </button>
                                         ) : (
                                             <button
                                                 disabled={isBusy}
                                                 style={{ ...primaryBtn, width: "auto", fontSize: 11, padding: "5px 10px", opacity: isBusy ? 0.5 : 1 }}
-                                                onClick={() => installTool(tool)}
+                                                 onClick={(event) => { event.stopPropagation(); installTool(tool); }}
                                             >
                                                 {isBusy ? "…" : "Install"}
                                             </button>

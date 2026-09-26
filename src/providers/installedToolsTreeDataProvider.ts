@@ -233,6 +233,10 @@ export class InstalledToolsTreeDataProvider implements vscode.TreeDataProvider<A
         return this.latestVersions.get(id);
     }
 
+    getAnalytics(id: string): ToolAnalytics | undefined {
+        return this.analytics.get(id);
+    }
+
     /** Return every installed tool that currently has an update available. */
     getToolsWithUpdates(): InstalledTool[] {
         return this.toolManager.getAll().filter((t) => this.hasUpdate(t));
