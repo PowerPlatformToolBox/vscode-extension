@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { FAVORITE_TOOLS_KEY } from "../constants";
 import { normalizeCspExceptions, type CspExceptions } from "../utils/csp";
 import { logger } from "../utils/logger";
-import { parseContributorsFromRecord, parseVerifiedFromRecord, str } from "./toolRegistryManager";
+import { parseContributorsFromRecord, str } from "./toolRegistryManager";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +44,15 @@ export interface Tool {
     repository?: string;
     /** Declared CSP exceptions requiring user consent before being applied to the tool's webview. */
     cspExceptions?: CspExceptions;
+    multiConnection?: "required" | "optional" | "none";
+    connectionRequirement?: "required" | "optional";
+    enabledForPowerPlatformAPI?: boolean;
+    mcpEnabled?: boolean;
+    maturityStatus?: string;
+    minAPI?: string;
+    maxAPI?: string;
+    checksum?: string;
+    size?: number;
 }
 
 /**
@@ -211,7 +220,7 @@ export class ToolManager implements vscode.Disposable {
 
         const merged = pkg ? { ...tool, ...pkg } : (tool as unknown as Record<string, unknown>);
         const contributors = parseContributorsFromRecord(merged) ?? tool.contributors;
-        const isVerified = parseVerifiedFromRecord(merged) || Boolean(tool.isVerified);
+        const isVerified = str(merged["maturityStatus"])?.toLowerCase() === "verified" || Boolean(tool.isVerified);
         const publisher = (pkg && str(pkg["publisher"])) ?? tool.publisher ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
 
         return {
@@ -306,7 +315,7 @@ export class ToolManager implements vscode.Disposable {
 
         const merged = pkg ? { ...tool, ...pkg } : (tool as unknown as Record<string, unknown>);
         const contributors = parseContributorsFromRecord(merged) ?? tool.contributors;
-        const isVerified = parseVerifiedFromRecord(merged) || Boolean(tool.isVerified);
+        const isVerified = str(merged["maturityStatus"])?.toLowerCase() === "verified" || Boolean(tool.isVerified);
         const publisher = (pkg && str(pkg["publisher"])) ?? tool.publisher ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
 
         const installed: InstalledTool = {

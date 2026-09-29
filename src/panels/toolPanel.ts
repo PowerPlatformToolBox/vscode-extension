@@ -148,7 +148,7 @@ export class ToolPanel {
      * Open (or reveal) a tool panel for the given toolId.
      * Each tool gets its own panel; launching the same tool again reveals it.
      * Validates the active connection and prompts for a secondary connection when
-     * the tool's package.json declares `features.multiConnection`.
+     * the normalized registry metadata declares `multi_connection`.
      */
     static open(
         extensionUri: vscode.Uri,
@@ -201,12 +201,13 @@ export class ToolPanel {
                 return;
             }
 
-            // Determine secondary connection requirement from the tool manifest
+            // Use the normalized release metadata; the installed manifest is the local fallback.
             let secondaryConnectionId: string | null = null;
             let secondaryConnectionUrl: string | null = null;
 
             if (tool) {
-                const multiConnection = ToolPanel.readToolMultiConnectionFeature(tool.toolPath);
+                const registryTool = await toolRegistryManager.getToolById(toolId);
+                const multiConnection = registryTool?.multiConnection ?? tool.multiConnection;
 
                 if (multiConnection === "required" || multiConnection === "optional") {
                     const selected = await ToolPanel.promptSecondaryConnection(managers.connectionsManager, activeConnection.id, multiConnection);
@@ -252,27 +253,6 @@ export class ToolPanel {
         });
 
         ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers));
-    }
-
-    /**
-     * Read the `features.multiConnection` value from the tool's package.json.
-     * Returns "required", "optional", or undefined if not declared / unreadable.
-     */
-    private static readToolMultiConnectionFeature(toolPath: string): "required" | "optional" | undefined {
-        try {
-            const pkgPath = path.join(toolPath, "package.json");
-            if (!fs.existsSync(pkgPath)) {
-                return undefined;
-            }
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { features?: { multiConnection?: string } };
-            const value = pkg?.features?.multiConnection;
-            if (value === "required" || value === "optional") {
-                return value;
-            }
-        } catch {
-            // Ignore read/parse errors
-        }
-        return undefined;
     }
 
     /**
