@@ -519,6 +519,7 @@
     "publish:preview": "npx @vscode/vsce publish --pre-release",
     "publish": "npx @vscode/vsce publish",
     "compile-tests": "tsc -p . --outDir out",
+    "test:registry": "npm run compile-tests && node --test test/registry.test.js",
     "pretest": "npm run compile-tests",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "node ./out/test/runTest.js",

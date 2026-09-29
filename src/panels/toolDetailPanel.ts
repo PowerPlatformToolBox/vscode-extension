@@ -22,7 +22,11 @@ export interface ToolDetailModel {
     contributors?: string[] | string;
     isVerified?: boolean;
     categories?: string[];
-    capabilityTags?: string[];
+    multiConnection?: RegistryTool["multiConnection"];
+    connectionRequirement?: RegistryTool["connectionRequirement"];
+    enabledForPowerPlatformAPI?: boolean;
+    mcpEnabled?: boolean;
+    maturityStatus?: string;
     icon?: IconSource;
     downloads?: number;
     rating?: number;
@@ -165,7 +169,11 @@ export class ToolDetailPanel {
             contributors: this.model.contributors,
             isVerified: this.model.isVerified,
             categories: this.model.categories,
-            capabilityTags: this.model.capabilityTags,
+            multiConnection: this.model.multiConnection,
+            connectionRequirement: this.model.connectionRequirement,
+            enabledForPowerPlatformAPI: this.model.enabledForPowerPlatformAPI,
+            mcpEnabled: this.model.mcpEnabled,
+            maturityStatus: this.model.maturityStatus,
             download: this.model.download,
             executableRelativePath: this.model.executableRelativePath,
             downloads: this.model.downloads,

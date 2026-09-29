@@ -14,7 +14,11 @@ interface Model {
     contributors?: string[] | string;
     isVerified?: boolean;
     categories?: string[];
-    capabilityTags?: string[];
+    multiConnection?: "required" | "optional" | "none";
+    connectionRequirement?: "required" | "optional";
+    enabledForPowerPlatformAPI?: boolean;
+    mcpEnabled?: boolean;
+    maturityStatus?: string;
     icon?: string | { light: string; dark: string };
     downloads?: number;
     rating?: number;
@@ -23,7 +27,6 @@ interface Model {
     repository?: string;
     website?: string;
     license?: string;
-    status?: string;
     isInstalled: boolean;
     installedVersion?: string;
     latestVersion?: string;
@@ -141,6 +144,8 @@ export default function App(): React.ReactElement {
                     ["Rating", model.rating?.toFixed(1)],
                     ["MAU", model.mau?.toLocaleString()],
                     ["License", model.license],
+                    ["Power Platform API Support", model.enabledForPowerPlatformAPI === true ? "Yes" : "No"],
+                    ["MCP Support", model.mcpEnabled === true ? "Yes" : "No"],
                 ]
                     .filter((entry) => entry[1])
                     .map(([label, value]) => (
@@ -169,13 +174,6 @@ export default function App(): React.ReactElement {
                     Report a concern
                 </button>
             </div>
-            {model.capabilityTags?.length ? (
-                <div className="tags">
-                    {model.capabilityTags.map((tag) => (
-                        <span key={tag}>{tag}</span>
-                    ))}
-                </div>
-            ) : null}
             <section className="readme">
                 <div
                     className="markdown"
@@ -211,4 +209,4 @@ function resolveReadmeImages(html: string, readmeUrl?: string): string {
     return documentFragment.body.innerHTML;
 }
 
-const styles = `:root{color-scheme:light dark}*{box-sizing:border-box}body{margin:0;background:var(--vscode-editor-background);color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size,13px)}main{max-width:1100px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:20px}.hero{display:flex;gap:24px;align-items:flex-start}.icon{width:96px;height:96px;flex:none;border:1px solid var(--vscode-panel-border);border-radius:16px;background:var(--vscode-sideBar-background);display:grid;place-items:center;font-size:36px;font-weight:600}.icon img{max-width:76px;max-height:76px}.heroText{min-width:0}.eyebrow{color:var(--vscode-descriptionForeground);font-size:12px;text-transform:uppercase;letter-spacing:.08em}.hero h1{margin:6px 0;font-size:28px}.hero p{margin:0 0 8px;color:var(--vscode-descriptionForeground);line-height:1.5}.byline{color:var(--vscode-descriptionForeground)}.verified{width:18px;height:18px;vertical-align:-2px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;border-radius:2px;padding:7px 16px;cursor:pointer}.actions button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:1px solid var(--vscode-button-border,var(--vscode-panel-border))}.actions button:disabled{opacity:.6;cursor:default}.error{color:var(--vscode-errorForeground)}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--vscode-panel-border);border:1px solid var(--vscode-panel-border)}.stats div{padding:12px;background:var(--vscode-sideBar-background);display:flex;flex-direction:column;gap:4px}.stats span{color:var(--vscode-descriptionForeground);font-size:11px}.links,.tags{display:flex;gap:12px;flex-wrap:wrap}.link{color:var(--vscode-textLink-foreground);background:none;border:0;padding:0;cursor:pointer}.link.concern{color:var(--vscode-errorForeground)}.tags span{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);border-radius:10px;padding:3px 9px;font-size:11px}.readme{border:1px solid var(--vscode-panel-border);border-radius:12px;padding:20px;background:color-mix(in srgb,var(--vscode-editor-background) 94%,var(--vscode-foreground))}.markdown{line-height:1.55}.markdown img{max-width:100%;height:auto}.markdown a{color:var(--vscode-textLink-foreground)}.markdown pre{overflow:auto;background:var(--vscode-textCodeBlock-background);padding:12px}.markdown code{font-family:var(--vscode-editor-font-family)}.markdown table{border-collapse:collapse;width:100%}.markdown th,.markdown td{border:1px solid var(--vscode-panel-border);padding:6px 8px;text-align:left}.loading{padding:32px}.error{white-space:pre-wrap}`;
+const styles = `:root{color-scheme:light dark}*{box-sizing:border-box}body{margin:0;background:var(--vscode-editor-background);color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size,13px)}main{max-width:1100px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:20px}.hero{display:flex;gap:24px;align-items:flex-start}.icon{width:96px;height:96px;flex:none;border:1px solid var(--vscode-panel-border);border-radius:16px;background:var(--vscode-sideBar-background);display:grid;place-items:center;font-size:36px;font-weight:600}.icon img{max-width:76px;max-height:76px}.heroText{min-width:0}.eyebrow{color:var(--vscode-descriptionForeground);font-size:12px;text-transform:uppercase;letter-spacing:.08em}.hero h1{margin:6px 0;font-size:28px}.hero p{margin:0 0 8px;color:var(--vscode-descriptionForeground);line-height:1.5}.byline{color:var(--vscode-descriptionForeground);font-weight:700}.verified{width:18px;height:18px;vertical-align:-2px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:0;border-radius:2px;padding:7px 16px;cursor:pointer}.actions button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:1px solid var(--vscode-button-border,var(--vscode-panel-border))}.actions button:disabled{opacity:.6;cursor:default}.error{color:var(--vscode-errorForeground)}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--vscode-panel-border);border:1px solid var(--vscode-panel-border)}.stats div{padding:12px;background:var(--vscode-sideBar-background);display:flex;flex-direction:column;gap:4px;min-width:0}.stats span{color:var(--vscode-descriptionForeground);font-size:11px}.links{display:flex;gap:12px;flex-wrap:wrap}.link{color:var(--vscode-textLink-foreground);background:none;border:0;padding:0;cursor:pointer}.link.concern{color:var(--vscode-errorForeground)}.readme{border-top:1px solid var(--vscode-panel-border);padding-top:20px}.markdown{line-height:1.6}.markdown img{max-width:100%;height:auto}.markdown a{color:var(--vscode-textLink-foreground)}@media(max-width:600px){main{padding:20px}.hero{gap:14px}.icon{width:64px;height:64px;font-size:24px}.icon img{max-width:52px;max-height:52px}.hero h1{font-size:22px}.stats{grid-template-columns:repeat(2,1fr)}}`;

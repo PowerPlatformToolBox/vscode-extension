@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import * as vscode from "vscode";
+import type { CspExceptions } from "../utils/csp";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -32,8 +33,16 @@ export interface RegistryTool {
     executableRelativePath?: string;
     /** Category groupings for this tool (e.g. "CLI", "DevOps"). */
     categories?: string[];
-    /** Capability tags that describe what this tool can do. */
-    capabilityTags?: string[];
+    multiConnection?: "required" | "optional" | "none";
+    connectionRequirement?: "required" | "optional";
+    enabledForPowerPlatformAPI?: boolean;
+    mcpEnabled?: boolean;
+    maturityStatus?: string;
+    minAPI?: string;
+    maxAPI?: string;
+    checksum?: string;
+    size?: number;
+    cspExceptions?: CspExceptions;
     readmeUrl?: string;
     repository?: string;
     website?: string;
@@ -137,16 +146,17 @@ export class ToolRegistryManager {
         const from = (page - 1) * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
 
-        const buildQuery = (selectColumns: string): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null }> => {
+        const buildQuery = (
+            selectColumns: string,
+            start = category ? 0 : from,
+            end = category ? 999 : to,
+        ): Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null }> => {
             // Typed as `any`: supabase-js infers row shape from the literal `selectColumns`
             // string, which breaks down once it's widened to `string` here — that's fine
             // since we parse rows manually via `mapRow` regardless of the inferred type.
-            let q = this.client!.from("tools").select(selectColumns, { count: "exact" }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+            let q = this.client!.from("tools_catalog").select(selectColumns, { count: "exact" }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             q = q.eq("status", "active");
-            q = q.range(from, to);
-            if (category) {
-                q = q.eq("category", category);
-            }
+            q = q.range(start, end);
             if (search) {
                 // Escape PostgREST ILIKE special characters so literal percent-signs,
                 // underscores, and backslashes in the search term are treated as text.
@@ -160,10 +170,13 @@ export class ToolRegistryManager {
         // relations so Popularity/Highly Rated/Most Downloaded sorting and the Category filter
         // have data to work with. Fall back to a plain query when either relation isn't
         // configured in this Supabase project so those features simply degrade to "no data".
-        let { data, error, count } = await buildQuery("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name))");
+        const catalogColumns =
+            "id, packagename, name, description, website, repository, status, created_at, version, download, icon, readme_url, license, csp_exceptions, min_api, max_api, multi_connection, connection_requirement, enabled_for_power_platform_api, mcp_enabled, maturity_status, tool_analytics(downloads,rating,mau), tool_categories(categories(name)), tool_contributors(contributors(name))";
+        let columns = catalogColumns;
+        let { data, error, count } = await buildQuery(columns);
         if (error) {
-            this.output.appendLine(`[Registry] getTools embedded-relations query failed, retrying without them: ${error.message}`);
-            ({ data, error, count } = await buildQuery("*"));
+            columns = "*";
+            ({ data, error, count } = await buildQuery(columns));
         }
 
         if (error) {
@@ -174,25 +187,57 @@ export class ToolRegistryManager {
         }
 
         this.output.appendLine(`[Registry] getTools returned ${count ?? 0} total rows, ${(data ?? []).length} in page`);
-        if ((data ?? []).length > 0) {
-            this.output.appendLine(`[Registry] First row keys: ${Object.keys((data as Record<string, unknown>[])[0]).join(", ")}`);
-            this.output.appendLine(`[Registry] First row raw: ${JSON.stringify((data as Record<string, unknown>[])[0])}`);
-        }
-
-        const tools = (data ?? []).map(mapRow);
-        const maturityMap = await this.getMaturityMap(tools.map((t) => t.id));
-        for (const tool of tools) {
-            if (maturityMap.has(tool.id)) {
-                tool.isVerified = maturityMap.get(tool.id) ?? false;
+        let rows = data ?? [];
+        if (category) {
+            // Category is a relation, not a flat catalog column. Fetch all pages before slicing.
+            for (let start = rows.length; start < (count ?? 0); start += 1000) {
+                const result = await buildQuery(columns, start, start + 999);
+                if (result.error) {
+                    this.output.appendLine(`[Registry] category page error: ${result.error.message}`);
+                    return { tools: [], total: 0 };
+                }
+                rows = rows.concat((result.data ?? []) as Record<string, unknown>[]);
             }
         }
-
+        if (columns === "*") {
+            await this.attachCatalogRelations(rows);
+        }
+        let tools = rows.map(mapRow);
+        if (category) {
+            tools = tools.filter((tool) => tool.categories?.includes(category));
+            count = tools.length;
+            tools = tools.slice(from, to + 1);
+        }
         this.output.appendLine(`[Registry] Mapped tools: ${tools.map((t) => `${t.id} (contributors=${JSON.stringify(t.contributors) ?? "none"}, verified=${t.isVerified})`).join("; ")}`);
 
         return {
             tools,
             total: count ?? 0,
         };
+    }
+
+    private async attachCatalogRelations(rows: Record<string, unknown>[]): Promise<void> {
+        if (!this.client) return;
+        for (let start = 0; start < rows.length; start += 100) {
+            const batch = rows.slice(start, start + 100);
+            const ids = batch.map((row) => str(row["id"])).filter((id): id is string => !!id);
+            if (!ids.length) continue;
+            for (const [table, columns] of [
+                ["tool_categories", "tool_id, categories(name)"],
+                ["tool_contributors", "tool_id, contributors(name)"],
+                ["tool_analytics", "tool_id, downloads, rating, mau"],
+            ]) {
+                const { data, error } = await this.client.from(table).select(columns).in("tool_id", ids);
+                if (error) {
+                    this.output.appendLine(`[Registry] ${table} lookup error: ${error.message}`);
+                    continue;
+                }
+                for (const row of batch) {
+                    const matches = ((data ?? []) as unknown as Record<string, unknown>[]).filter((relation) => relation["tool_id"] === row["id"]);
+                    row[table] = table === "tool_analytics" ? matches[0] : matches;
+                }
+            }
+        }
     }
 
     /**
@@ -207,7 +252,7 @@ export class ToolRegistryManager {
             return map;
         }
 
-        const { data, error } = await this.client.from("tools").select("id, tool_analytics(downloads,rating,mau)").in("id", toolIds).eq("status", "active");
+        const { data, error } = await this.client.from("tools_catalog").select("id, tool_analytics(downloads,rating,mau)").in("id", toolIds).eq("status", "active");
 
         if (error) {
             this.output.appendLine(`[Registry] getAnalytics error: ${error.message}`);
@@ -240,7 +285,7 @@ export class ToolRegistryManager {
             return map;
         }
 
-        const { data, error } = await this.client.from("tools").select("id, version").in("id", toolIds).eq("status", "active");
+        const { data, error } = await this.client.from("tools_catalog").select("id, version").in("id", toolIds).eq("status", "active");
 
         if (error) {
             this.output.appendLine(`[Registry] getLatestVersions error: ${error.message}`);
@@ -268,64 +313,24 @@ export class ToolRegistryManager {
         }
 
         let { data, error } = await this.client
-            .from("tools")
-            .select("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name))")
+            .from("tools_catalog")
+            .select("*, tool_analytics(downloads,rating,mau), tool_categories(categories(name)), tool_contributors(contributors(name))")
             .eq("id", id)
             .eq("status", "active")
             .single();
         if (error) {
-            ({ data, error } = await this.client.from("tools").select("*").eq("id", id).eq("status", "active").single());
+            ({ data, error } = await this.client.from("tools_catalog").select("*").eq("id", id).eq("status", "active").single());
         }
 
         if (error || !data) {
             return null;
         }
 
+        if (!data["tool_categories"]) {
+            await this.attachCatalogRelations([data as Record<string, unknown>]);
+        }
         const tool = mapRow(data as Record<string, unknown>);
-        const maturityMap = await this.getMaturityMap([tool.id]);
-        if (maturityMap.has(tool.id)) {
-            tool.isVerified = maturityMap.get(tool.id) ?? false;
-        }
         return tool;
-    }
-
-    /**
-     * Query the `tool_maturity` table for the given tool IDs and return a map
-     * of tool ID → verified status. A tool with no row in `tool_maturity` is
-     * considered *not verified*. A missing/unqueryable table is treated as
-     * "unknown" (empty map) so callers fall back to any other verification
-     * signal already present on the tool row.
-     */
-    private async getMaturityMap(toolIds: string[]): Promise<Map<string, boolean>> {
-        const map = new Map<string, boolean>();
-        if (!this.client || toolIds.length === 0) {
-            return map;
-        }
-
-        const { data, error } = await this.client.from("tool_maturity").select("tool_id, status").in("tool_id", toolIds);
-
-        if (error) {
-            this.output.appendLine(`[Registry] tool_maturity lookup error: ${error.message}`);
-            return map;
-        }
-
-        for (const row of (data ?? []) as Record<string, unknown>[]) {
-            const toolId = str(row["tool_id"]);
-            if (!toolId) {
-                continue;
-            }
-            const status = str(row["status"])?.toLowerCase();
-            map.set(toolId, status === "verified");
-        }
-
-        // Any requested tool without a tool_maturity row is explicitly not verified.
-        for (const id of toolIds) {
-            if (!map.has(id)) {
-                map.set(id, false);
-            }
-        }
-
-        return map;
     }
 
     /**
@@ -339,30 +344,13 @@ export class ToolRegistryManager {
             return [];
         }
 
-        // Select all columns; we filter capability tags client-side to avoid
-        // column-name guessing issues.
-        const { data, error } = await this.client.from("tools").select("*").eq("status", "active");
+        const { data, error } = await this.client.from("capability_tags").select("tag");
 
         if (error) {
             this.output.appendLine(`[Registry] getKnownCapabilityTags error: ${error.message}`);
             return [];
         }
-
-        const tagSet = new Set<string>();
-        for (const row of data ?? []) {
-            const r = row as Record<string, unknown>;
-            // Accept both naming conventions
-            const tags = r["capabilityTags"] ?? r["capability_tags"];
-            if (Array.isArray(tags)) {
-                for (const tag of tags) {
-                    if (typeof tag === "string" && tag.length > 0) {
-                        tagSet.add(tag);
-                    }
-                }
-            }
-        }
-
-        return Array.from(tagSet).sort();
+        return [...new Set((data ?? []).map((row) => str(row.tag)).filter((tag): tag is string => !!tag))].sort();
     }
 
     /**
@@ -375,7 +363,7 @@ export class ToolRegistryManager {
             return [];
         }
         try {
-            const { data, error } = await this.client.from("tools").select("icon").eq("status", "active");
+            const { data, error } = await this.client.from("tools_catalog").select("icon").eq("status", "active");
             if (error || !data) {
                 return [];
             }
@@ -457,48 +445,19 @@ export function extractNames(v: unknown): string[] | string | undefined {
 }
 
 export function parseContributorsFromRecord(row: Record<string, unknown>): string[] | string | undefined {
-    const keys = ["contributors", "contributor", "authors", "author", "publisher", "maintainers", "maintainer", "developer", "developers", "owner", "created_by", "org", "organization"];
-
-    for (const key of keys) {
-        const val = row[key];
-        if (val !== null && val !== undefined) {
-            const parsed = extractNames(val);
-            if (parsed) {
-                return parsed;
-            }
+    const joined = row["tool_contributors"];
+    if (Array.isArray(joined)) {
+        const names = joined
+            .map((entry) => {
+                const contributor = entry && typeof entry === "object" ? (entry as Record<string, unknown>)["contributors"] : undefined;
+                return contributor && typeof contributor === "object" ? str((contributor as Record<string, unknown>)["name"]) : undefined;
+            })
+            .filter((name): name is string => !!name);
+        if (names.length) {
+            return names;
         }
     }
-
-    // Fall back to scanning one level of nested JSON blobs (e.g. a
-    // "package_json" / "manifest" / "metadata" column holding the tool's
-    // full package.json) for the same set of contributor-like keys.
-    for (const value of Object.values(row)) {
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-            const nested = value as Record<string, unknown>;
-            for (const key of keys) {
-                const val = nested[key];
-                if (val !== null && val !== undefined) {
-                    const parsed = extractNames(val);
-                    if (parsed) {
-                        return parsed;
-                    }
-                }
-            }
-        }
-    }
-
     return undefined;
-}
-
-export function parseVerifiedFromRecord(row: Record<string, unknown>): boolean {
-    const candidates = [row["isVerified"], row["is_verified"], row["verified"], row["is_official"], row["official"], row["verified_tool"], row["is_verified_tool"], row["badge"]];
-    for (const val of candidates) {
-        const b = bool(val);
-        if (b !== undefined) {
-            return b;
-        }
-    }
-    return false;
 }
 
 export function formatContributors(contributors?: string[] | string): string | undefined {
@@ -556,23 +515,17 @@ function parseCategoriesFromRecord(row: Record<string, unknown>): string[] | und
         }
     }
 
-    const flatArray = row["categories"];
-    if (Array.isArray(flatArray)) {
-        const names = flatArray.filter((v): v is string => typeof v === "string" && v.length > 0);
-        if (names.length > 0) {
-            return names;
-        }
-    }
-
-    const single = str(row["category"]);
-    return single ? [single] : undefined;
+    return undefined;
 }
 
 function mapRow(row: Record<string, unknown>): RegistryTool {
     const contributors = parseContributorsFromRecord(row);
     const publisher = str(row["publisher"]) ?? str(row["author"]) ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
-    const isVerified = parseVerifiedFromRecord(row);
+    const maturityStatus = str(row["maturity_status"]);
+    const isVerified = maturityStatus?.toLowerCase() === "verified";
     const analytics = parseAnalyticsFromRecord(row);
+    const multiConnection = row["multi_connection"];
+    const connectionRequirement = row["connection_requirement"];
 
     return {
         id: str(row["id"]) ?? "",
@@ -586,10 +539,17 @@ function mapRow(row: Record<string, unknown>): RegistryTool {
         icon: str(row["icon"]),
         executableRelativePath: str(row["executableRelativePath"]) ?? str(row["executable_relative_path"]),
         categories: parseCategoriesFromRecord(row),
-        capabilityTags: (Array.isArray(row["capabilityTags"]) ? row["capabilityTags"] : Array.isArray(row["capability_tags"]) ? row["capability_tags"] : undefined) as string[] | undefined,
-        // Supabase uses the legacy lowercase column name `readmeurl`, which is
-        // also the field consumed by the desktop app's registry mapper.
-        readmeUrl: str(row["readmeurl"]) ?? str(row["readmeUrl"]) ?? str(row["readme_url"]) ?? str(row["readme"]),
+        multiConnection: multiConnection === "required" || multiConnection === "optional" || multiConnection === "none" ? multiConnection : undefined,
+        connectionRequirement: connectionRequirement === "required" || connectionRequirement === "optional" ? connectionRequirement : undefined,
+        enabledForPowerPlatformAPI: typeof row["enabled_for_power_platform_api"] === "boolean" ? row["enabled_for_power_platform_api"] : undefined,
+        mcpEnabled: typeof row["mcp_enabled"] === "boolean" ? row["mcp_enabled"] : undefined,
+        maturityStatus,
+        minAPI: str(row["min_api"]),
+        maxAPI: str(row["max_api"]),
+        checksum: str(row["checksum"]),
+        size: typeof row["size"] === "number" ? row["size"] : undefined,
+        cspExceptions: row["csp_exceptions"] && typeof row["csp_exceptions"] === "object" ? (row["csp_exceptions"] as CspExceptions) : undefined,
+        readmeUrl: str(row["readme_url"]),
         repository: str(row["repository"]) ?? str(row["repository_url"]),
         website: str(row["website"]) ?? str(row["website_url"]),
         license: str(row["license"]),
