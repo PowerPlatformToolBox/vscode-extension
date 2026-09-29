@@ -70,9 +70,11 @@ export class ToolPanel {
     private readonly context: vscode.ExtensionContext;
     private readonly toolManager: ToolManager;
     private readonly toolRegistryManager: ToolRegistryManager;
+    private readonly multiConnectionMode: "required" | "optional" | "none";
     private readonly connectionsManager?: ConnectionsManager;
     private readonly dataverseManager?: DataverseManager;
     private readonly powerPlatformManager?: PowerPlatformManager;
+    private readonly secondaryConnectionStatusBar?: vscode.StatusBarItem;
 
     private toolContext: ToolContext;
 
@@ -88,6 +90,7 @@ export class ToolPanel {
         toolManager: ToolManager,
         toolRegistryManager: ToolRegistryManager,
         managers?: OpenManagers,
+        multiConnectionMode: "required" | "optional" | "none" = "none",
         initialContext?: Partial<Pick<ToolContext, "connectionId" | "connectionUrl" | "secondaryConnectionId" | "secondaryConnectionUrl">>,
     ) {
         this.panel = panel;
@@ -95,6 +98,7 @@ export class ToolPanel {
         this.context = context;
         this.toolManager = toolManager;
         this.toolRegistryManager = toolRegistryManager;
+        this.multiConnectionMode = multiConnectionMode;
         this.connectionsManager = managers?.connectionsManager;
         this.dataverseManager = managers?.dataverseManager;
         this.powerPlatformManager = managers?.powerPlatformManager;
@@ -106,6 +110,19 @@ export class ToolPanel {
             secondaryConnectionUrl: initialContext?.secondaryConnectionUrl ?? null,
             secondaryConnectionId: initialContext?.secondaryConnectionId ?? null,
         };
+
+        if (this.connectionsManager && this.multiConnectionMode !== "none") {
+            this.secondaryConnectionStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10);
+            this.secondaryConnectionStatusBar.command = {
+                command: `pptb.toolPanel.selectSecondaryConnection.${toolId}`,
+                title: "Select secondary connection",
+            };
+            this.disposables.push(
+                vscode.commands.registerCommand(`pptb.toolPanel.selectSecondaryConnection.${toolId}`, () => this.showSecondaryConnectionPicker()),
+                this.panel.onDidChangeViewState(() => this.updateSecondaryConnectionStatusBar()),
+            );
+            this.updateSecondaryConnectionStatusBar();
+        }
 
         const toolForHtml = this.toolManager.getById(toolId);
         this.panel.webview.html = toolForHtml ? (this.loadToolHtml(toolForHtml) ?? this.getNoUiHtml(toolForHtml)) : this.getNoUiHtml(null);
@@ -126,6 +143,7 @@ export class ToolPanel {
         if (this.connectionsManager) {
             this.disposables.push(
                 this.connectionsManager.onConnectionsChanged.event(() => {
+                    this.updateSecondaryConnectionStatusBar();
                     this.pushEvent("connection:updated", {});
                 }),
             );
@@ -190,6 +208,8 @@ export class ToolPanel {
             }
         }
 
+        let multiConnectionMode: "required" | "optional" | "none" = tool?.multiConnection ?? "none";
+
         // Validate primary connection before launching
         if (managers?.connectionsManager) {
             const activeConnection = managers.connectionsManager.getActiveConnection();
@@ -207,7 +227,8 @@ export class ToolPanel {
 
             if (tool) {
                 const registryTool = await toolRegistryManager.getToolById(toolId);
-                const multiConnection = registryTool?.multiConnection ?? tool.multiConnection;
+                multiConnectionMode = registryTool?.multiConnection ?? tool.multiConnection ?? "none";
+                const multiConnection = multiConnectionMode;
 
                 if (multiConnection === "required" || multiConnection === "optional") {
                     const selected = await ToolPanel.promptSecondaryConnection(managers.connectionsManager, activeConnection.id, multiConnection);
@@ -238,7 +259,7 @@ export class ToolPanel {
             });
 
             const initialContext: Partial<ToolContext> = { secondaryConnectionId, secondaryConnectionUrl };
-            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, initialContext));
+            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode, initialContext));
             return;
         }
 
@@ -252,7 +273,7 @@ export class ToolPanel {
             retainContextWhenHidden: true,
         });
 
-        ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers));
+        ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode));
     }
 
     /**
@@ -265,6 +286,7 @@ export class ToolPanel {
         connectionsManager: ConnectionsManager,
         primaryConnectionId: string,
         mode: "required" | "optional",
+        currentSecondaryConnectionId?: string | null,
     ): Promise<{ id: string; url: string } | null | undefined> {
         const candidates = connectionsManager.getAll().filter((c) => c.id !== primaryConnectionId);
 
@@ -281,13 +303,14 @@ export class ToolPanel {
         const items: PickItem[] = candidates.map((c) => ({
             label: c.name,
             description: c.url,
-            detail: [c.environment, c.category].filter(Boolean).join(" · "),
+            detail: [c.id === currentSecondaryConnectionId ? "Current selection" : undefined, c.environment, c.category].filter(Boolean).join(" · "),
+            picked: c.id === currentSecondaryConnectionId,
             connectionId: c.id,
             connectionUrl: c.url,
         }));
 
         if (mode === "optional") {
-            items.push({ label: "$(close) Skip", description: "Launch without a secondary connection" });
+            items.push({ label: "$(close) Clear secondary connection", description: "Continue without a secondary connection" });
         }
 
         const picked = await vscode.window.showQuickPick<PickItem>(items, {
@@ -308,6 +331,7 @@ export class ToolPanel {
 
     dispose(toolId: string): void {
         ToolPanel.panels.delete(toolId);
+        this.secondaryConnectionStatusBar?.dispose();
         this.panel.dispose();
         this.terminalManager.dispose();
         for (const d of this.disposables) {
@@ -895,11 +919,49 @@ export class ToolPanel {
             secondaryConnectionId: typeof next?.secondaryConnectionId === "string" || next?.secondaryConnectionId === null ? next.secondaryConnectionId : this.toolContext.secondaryConnectionId,
         };
 
+        this.updateSecondaryConnectionStatusBar();
+
         void this.panel.webview.postMessage({
             source: "pptb-host",
             type: "pptb:context",
             context: this.toolContext,
         });
+    }
+
+    private updateSecondaryConnectionStatusBar(): void {
+        const statusBar = this.secondaryConnectionStatusBar;
+        if (!statusBar) return;
+
+        if (!this.panel.active || !this.connectionsManager) {
+            statusBar.hide();
+            return;
+        }
+
+        const secondary = this.toolContext.secondaryConnectionId ? this.connectionsManager.getById(this.toolContext.secondaryConnectionId) : undefined;
+        statusBar.text = `$(database) Secondary: ${secondary?.name ?? "Select connection"}`;
+        statusBar.tooltip = secondary
+            ? `Secondary connection: ${secondary.name} (${secondary.url})\nClick to change this tool's secondary connection`
+            : "Click to select this tool's secondary connection";
+        statusBar.show();
+    }
+
+    private async showSecondaryConnectionPicker(): Promise<void> {
+        if (!this.connectionsManager || this.multiConnectionMode === "none") return;
+
+        const primary = await this.getConnection("primary");
+        if (!primary) {
+            void vscode.window.showWarningMessage("No primary connection is available for this tool.");
+            return;
+        }
+
+        const selected = await ToolPanel.promptSecondaryConnection(this.connectionsManager, primary.id, this.multiConnectionMode, this.toolContext.secondaryConnectionId);
+        if (selected === undefined) return;
+
+        this.setToolContext({
+            secondaryConnectionId: selected?.id ?? null,
+            secondaryConnectionUrl: selected?.url ?? null,
+        });
+        this.pushEvent("connection:updated", {});
     }
 
     private pushEvent(event: string, data: unknown): void {
