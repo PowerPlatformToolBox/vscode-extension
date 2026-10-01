@@ -2,7 +2,7 @@
   "name": "power-platform-toolbox",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "publisher": "PowerPlatformToolBox",
   "license": "GPL-3.0",
   "icon": "resources/icon.png",
@@ -516,15 +516,15 @@
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool false",
-    "publish:preview": "npx @vscode/vsce publish --pre-release",
-    "publish": "npx @vscode/vsce publish",
     "compile-tests": "tsc -p . --outDir out",
     "test:registry": "npm run compile-tests && node --test test/registry.test.js",
     "test:connections": "npm run compile-tests && node --test test/connections.test.js",
     "pretest": "npm run compile-tests",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "node ./out/test/runTest.js",
-    "format": "prettier --write src"
+    "format": "prettier --write src",
+    "version-stable": "npm version patch --no-git-tag-version",
+    "publish": "npx @vscode/vsce publish"
   },
   "dependencies": {
     "@azure/msal-node": "^3.8.10",
