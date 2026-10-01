@@ -31,6 +31,8 @@ export interface ConnectionPublicFields {
     powerPlatformTokenExpiry?: string;
     /** Marks a connection imported from file that is missing required credentials. */
     hasIncompleteCredentials?: boolean;
+    /** Required fields that were missing when this connection was imported. */
+    missingRequiredFields?: ("name" | "url" | "environment" | "authType")[];
     /** Browser to use for interactive auth. Undefined = system default. */
     browser?: "chrome" | "edge";
     /** Browser profile directory (e.g. "Default", "Profile 1") used for interactive auth. */
@@ -62,7 +64,7 @@ export type Connection = ConnectionPublicFields & Partial<ConnectionSecretFields
 // ---------------------------------------------------------------------------
 
 /** A single connection entry within a connection export file. */
-export type ConnectionExportEntry = Omit<ConnectionPublicFields, "msalAccountId" | "tokenExpiry" | "powerPlatformTokenExpiry" | "hasIncompleteCredentials">;
+export type ConnectionExportEntry = Omit<ConnectionPublicFields, "msalAccountId" | "tokenExpiry" | "powerPlatformTokenExpiry" | "hasIncompleteCredentials" | "missingRequiredFields">;
 
 /** Shape of the JSON file produced by `exportConnections`. */
 export interface ConnectionExport {
@@ -82,10 +84,34 @@ export interface ConnectionImportResult {
 // Validation helpers (used by importConnections)
 // ---------------------------------------------------------------------------
 
-const REQUIRED_IMPORT_FIELDS: (keyof ConnectionPublicFields)[] = ["name", "url", "environment", "authType"];
+type RequiredConnectionField = "name" | "url" | "environment" | "authType";
+
+const REQUIRED_IMPORT_FIELDS: RequiredConnectionField[] = ["name", "url", "environment", "authType"];
 
 const VALID_ENVIRONMENTS = new Set<string>(["Dev", "Test", "UAT", "Production"]);
 const VALID_AUTH_TYPES = new Set<string>(Object.values(AUTH_TYPES));
+const DESKTOP_AUTH_TYPES: Record<string, AuthType> = {
+    interactive: AUTH_TYPES.INTERACTIVE_BROWSER,
+    clientSecret: AUTH_TYPES.CLIENT_CREDENTIALS,
+    usernamePassword: AUTH_TYPES.USERNAME_PASSWORD,
+};
+
+export function getMissingRequiredFields(connection: Connection): RequiredConnectionField[] {
+    const missingFields = new Set(connection.missingRequiredFields ?? []);
+    if (!connection.name?.trim()) missingFields.add("name");
+    if (!connection.url?.trim()) missingFields.add("url");
+    if (!VALID_ENVIRONMENTS.has(connection.environment)) missingFields.add("environment");
+    if (!VALID_AUTH_TYPES.has(connection.authType)) missingFields.add("authType");
+    return REQUIRED_IMPORT_FIELDS.filter((field) => missingFields.has(field));
+}
+
+export function getConnectionReadinessIssues(connection: Connection): string[] {
+    const issues: string[] = getMissingRequiredFields(connection);
+    if (connection.hasIncompleteCredentials) {
+        issues.push("credentials");
+    }
+    return issues;
+}
 
 /**
  * Manages connections — persistence split between globalState (non-sensitive)
@@ -133,6 +159,7 @@ export class ConnectionsManager {
             id,
             createdAt: now,
             lastUsedAt: now,
+            hasIncompleteCredentials: this.hasIncompleteCredentials(connection),
         };
 
         connections.push(publicConnection);
@@ -152,9 +179,10 @@ export class ConnectionsManager {
             throw new Error(`Connection with id "${connection.id}" not found`);
         }
 
+        const existingSecrets = await this.loadSecrets(connection.id);
         const { clientSecret, password, accessToken, refreshToken, ...publicFields } = connection;
 
-        connections[index] = { ...connections[index], ...publicFields };
+        connections[index] = { ...connections[index], ...publicFields, hasIncompleteCredentials: this.hasIncompleteCredentials(connection, existingSecrets) };
         await this.context.globalState.update(CONNECTIONS_STATE_KEY, connections);
 
         // Update secrets
@@ -203,6 +231,10 @@ export class ConnectionsManager {
         if (!connection) {
             throw new Error(`Connection "${id}" not found`);
         }
+        const issues = getConnectionReadinessIssues(connection);
+        if (issues.length > 0) {
+            throw new Error(`Cannot connect: incomplete required fields or credentials: ${issues.join(", ")}.`);
+        }
         await this.context.globalState.update(ACTIVE_CONNECTION_KEY, id);
 
         // Update lastUsedAt
@@ -245,6 +277,10 @@ export class ConnectionsManager {
      * Returns true if the request succeeds.
      */
     async testConnection(connection: Connection): Promise<boolean> {
+        const issues = getConnectionReadinessIssues(connection);
+        if (issues.length > 0) {
+            throw new Error(`Cannot test connection: incomplete required fields or credentials: ${issues.join(", ")}.`);
+        }
         if (!this.dataverseManager) {
             throw new Error("DataverseManager is not initialized");
         }
@@ -270,7 +306,7 @@ export class ConnectionsManager {
      * The public fields excluded from exports (runtime state that is meaningless
      * in another environment).
      */
-    private static readonly EXPORT_EXCLUDED_PUBLIC_FIELDS: (keyof ConnectionPublicFields)[] = ["msalAccountId", "tokenExpiry", "powerPlatformTokenExpiry", "hasIncompleteCredentials"];
+    private static readonly EXPORT_EXCLUDED_PUBLIC_FIELDS: (keyof ConnectionPublicFields)[] = ["msalAccountId", "tokenExpiry", "powerPlatformTokenExpiry", "hasIncompleteCredentials", "missingRequiredFields"];
 
     /**
      * Export connections to a sanitized JSON structure.
@@ -303,7 +339,7 @@ export class ConnectionsManager {
 
     /**
      * Import connections from a parsed JSON export payload.
-     * Validates structure; marks connections with missing required secrets as incomplete.
+     * Validates structure; imports missing required fields as incomplete connections.
      *
      * @throws `Error` when the payload structure is invalid (wrong version, missing array, etc.).
      * @returns Summary of how many connections were imported, skipped, and any per-entry warnings.
@@ -315,7 +351,7 @@ export class ConnectionsManager {
 
         const payload = data as Record<string, unknown>;
 
-        if (payload.version !== 1) {
+        if (payload.version !== undefined && payload.version !== 1) {
             throw new Error(`Unsupported export version: ${String(payload.version)}. Expected version 1.`);
         }
 
@@ -344,34 +380,41 @@ export class ConnectionsManager {
             const entry = raw as Record<string, unknown>;
             const connName = typeof entry.name === "string" ? entry.name : "(unknown)";
 
+            const importedAuthType =
+                typeof entry.authType === "string" && VALID_AUTH_TYPES.has(entry.authType)
+                    ? (entry.authType as AuthType)
+                    : typeof entry.authenticationType === "string"
+                      ? DESKTOP_AUTH_TYPES[entry.authenticationType]
+                      : typeof entry.authType === "string"
+                        ? DESKTOP_AUTH_TYPES[entry.authType]
+                        : undefined;
+
             // Validate required fields
             const missingFields: string[] = [];
             for (const field of REQUIRED_IMPORT_FIELDS) {
-                if (!entry[field] || typeof entry[field] !== "string") {
+                const value = field === "authType" ? importedAuthType : entry[field];
+                if (typeof value !== "string" || !value.trim()) {
                     missingFields.push(field);
                 }
             }
 
-            if (missingFields.length > 0) {
-                skipped++;
-                warnings.push(`Skipped "${connName}": missing required fields: ${missingFields.join(", ")}.`);
-                continue;
-            }
-
-            if (!VALID_ENVIRONMENTS.has(entry.environment as string)) {
+            if (typeof entry.environment === "string" && entry.environment && !VALID_ENVIRONMENTS.has(entry.environment)) {
                 skipped++;
                 warnings.push(`Skipped "${connName}": invalid environment "${String(entry.environment)}". Must be Dev, Test, UAT, or Production.`);
                 continue;
             }
 
-            if (!VALID_AUTH_TYPES.has(entry.authType as string)) {
+            if (typeof entry.authType === "string" && entry.authType && !VALID_AUTH_TYPES.has(entry.authType) && !DESKTOP_AUTH_TYPES[entry.authType]) {
                 skipped++;
                 warnings.push(`Skipped "${connName}": invalid authType "${String(entry.authType)}".`);
                 continue;
             }
+            if (missingFields.length > 0) {
+                warnings.push(`Imported "${connName}" with warning: missing required fields: ${missingFields.join(", ")}.`);
+            }
 
             // Determine if credentials are complete for this auth type
-            const authType = entry.authType as AuthType;
+            const authType = importedAuthType ?? AUTH_TYPES.INTERACTIVE_BROWSER;
             let hasIncompleteCredentials = false;
 
             if (authType === AUTH_TYPES.CLIENT_CREDENTIALS) {
@@ -399,9 +442,9 @@ export class ConnectionsManager {
 
             const newConnection: ConnectionPublicFields = {
                 id: newId,
-                name: entry.name as string,
-                url: entry.url as string,
-                environment: entry.environment as ConnectionPublicFields["environment"],
+                name: typeof entry.name === "string" ? entry.name : "",
+                url: typeof entry.url === "string" ? entry.url : "",
+                environment: VALID_ENVIRONMENTS.has(entry.environment as string) ? (entry.environment as ConnectionPublicFields["environment"]) : "Dev",
                 authType: authType,
                 clientId: typeof entry.clientId === "string" ? entry.clientId : undefined,
                 username: typeof entry.username === "string" ? entry.username : undefined,
@@ -416,7 +459,11 @@ export class ConnectionsManager {
                         ? (entry.scopesForPowerPlatformAPI as string[])
                         : undefined,
                 hasIncompleteCredentials,
+                missingRequiredFields: missingFields as RequiredConnectionField[],
             };
+            if (!newConnection.browser && typeof entry.browserType === "string") {
+                newConnection.browser = entry.browserType === "chrome" || entry.browserType === "edge" ? entry.browserType : undefined;
+            }
 
             existing.push(newConnection);
             imported++;
@@ -480,6 +527,16 @@ export class ConnectionsManager {
 
     private secretsKey(id: string): string {
         return `${CONNECTION_SECRETS_KEY_PREFIX}.${id}.${CONNECTION_SECRETS_KEY_SUFFIX}`;
+    }
+
+    private hasIncompleteCredentials(connection: Connection, existingSecrets: ConnectionSecretFields = {}): boolean {
+        if (connection.authType === AUTH_TYPES.CLIENT_CREDENTIALS) {
+            return !connection.clientId?.trim() || !(connection.clientSecret ?? existingSecrets.clientSecret)?.trim();
+        }
+        if (connection.authType === AUTH_TYPES.USERNAME_PASSWORD) {
+            return !connection.username?.trim() || !(connection.password ?? existingSecrets.password)?.trim();
+        }
+        return false;
     }
 
     private getActiveConnectionId(): string | undefined {

@@ -30,6 +30,7 @@ export interface Connection {
     browserProfileName?: string;
     createdAt?: string;
     lastUsedAt?: string;
+    missingRequiredFields?: ("name" | "url" | "environment" | "authType")[];
 }
 
 // ── VS Code API ────────────────────────────────────────────────────────────────
@@ -245,6 +246,12 @@ export default function App(): React.ReactElement {
 
     const update = (patch: Partial<Connection>) => setConn((prev) => ({ ...prev, ...patch }));
 
+    const updateRequiredField = (field: NonNullable<Connection["missingRequiredFields"]>[number], patch: Partial<Connection>) =>
+        setConn((prev) => {
+            const missingRequiredFields = prev.missingRequiredFields?.filter((missingField) => missingField !== field);
+            return { ...prev, ...patch, missingRequiredFields: missingRequiredFields?.length ? missingRequiredFields : undefined };
+        });
+
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         vscodeApi.postMessage({ type: "pptb:save", connection: conn });
@@ -391,10 +398,15 @@ export default function App(): React.ReactElement {
                 {/* Row 1: Connection Name + Auth Type */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                     <Field label="Connection Name" required>
-                        <input style={inputStyle} type="text" value={conn.name} placeholder="Production" autoFocus onChange={(e) => update({ name: e.target.value })} />
+                        <input style={inputStyle} type="text" value={conn.name} placeholder="Production" autoFocus onChange={(e) => updateRequiredField("name", { name: e.target.value })} />
                     </Field>
                     <Field label="Authentication Type" required>
-                        <select style={selectStyle} value={conn.authType} onChange={(e) => update({ authType: e.target.value as AuthType })}>
+                        <select
+                            style={selectStyle}
+                            value={conn.missingRequiredFields?.includes("authType") ? "" : conn.authType}
+                            onChange={(e) => updateRequiredField("authType", { authType: e.target.value as AuthType })}
+                        >
+                            {conn.missingRequiredFields?.includes("authType") && <option value="">Select an authentication type</option>}
                             {AUTH_OPTIONS.map((o) => (
                                 <option key={o.value} value={o.value}>
                                     {o.label}
@@ -430,21 +442,18 @@ export default function App(): React.ReactElement {
 
                 {/* Environment URL */}
                 <Field label="Environment URL" required hint="The root URL of your Dataverse / Power Platform environment.">
-                    <input style={inputStyle} type="url" value={conn.url} placeholder="https://org.crm.dynamics.com" onChange={(e) => update({ url: e.target.value })} />
+                    <input style={inputStyle} type="url" value={conn.url} placeholder="https://org.crm.dynamics.com" onChange={(e) => updateRequiredField("url", { url: e.target.value })} />
                 </Field>
 
                 {/* Environment + Color */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                    <Field label="Environment">
+                    <Field label="Environment" required>
                         <select
                             style={selectStyle}
-                            value={conn.environment}
-                            onChange={(e) =>
-                                update({
-                                    environment: e.target.value as Connection["environment"],
-                                })
-                            }
+                            value={conn.missingRequiredFields?.includes("environment") ? "" : conn.environment}
+                            onChange={(e) => updateRequiredField("environment", { environment: e.target.value as Connection["environment"] })}
                         >
+                            {conn.missingRequiredFields?.includes("environment") && <option value="">Select an environment</option>}
                             {ENVIRONMENTS.map((env) => (
                                 <option key={env} value={env}>
                                     {env}

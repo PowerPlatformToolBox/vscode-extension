@@ -6,6 +6,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { AUTH_CACHE_FILE, AUTH_TYPES, AUTHORITY_BASE, COMMON_TENANT, POWER_PLATFORM_CLIENT_ID } from "../constants";
 import { BrowserManager } from "./browserManager";
+import { getConnectionReadinessIssues } from "./connectionsManager";
 import type { Connection } from "./connectionsManager";
 
 /**
@@ -190,6 +191,10 @@ export class AuthManager implements vscode.Disposable {
      * opening the browser on every request.
      */
     async acquireToken(connection: Connection): Promise<string> {
+        const issues = getConnectionReadinessIssues(connection);
+        if (issues.length > 0) {
+            throw new Error(`Cannot connect: incomplete required fields or credentials: ${issues.join(", ")}.`);
+        }
         const scope = `${connection.url}/.default`;
 
         switch (connection.authType) {

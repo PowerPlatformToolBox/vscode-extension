@@ -80,7 +80,7 @@ export class ConnectionPanel {
             return;
         }
 
-        const panel = vscode.window.createWebviewPanel("pptb.connectionPanel", connection ? `Edit Connection — ${connection.name}` : "Add Connection", column ?? vscode.ViewColumn.One, {
+        const panel = vscode.window.createWebviewPanel("pptb.connectionPanel", connection ? `Edit Connection — ${connection.name || "(Missing name)"}` : "Add Connection", column ?? vscode.ViewColumn.One, {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(extensionUri, "dist", "webviews")],
             retainContextWhenHidden: true,

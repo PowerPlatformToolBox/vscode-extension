@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ENVIRONMENT_DEFAULT_COLORS } from "../constants";
-import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
+import { getConnectionReadinessIssues, type Connection, type ConnectionsManager } from "../managers/connectionsManager";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 
 /**
@@ -36,11 +36,15 @@ export class ConnectionTreeItem extends vscode.TreeItem {
             const conn = connectionOrLabel as Connection;
             const isActive = isActiveOrColor as boolean;
             const iconMgr = isCategoryOrIconMgr as IconCacheManager | undefined;
-            super(conn.name, collapsibleState);
+            const readinessIssues = getConnectionReadinessIssues(conn);
+            super(`${readinessIssues.length > 0 ? "$(warning) " : ""}${conn.name || "(Missing name)"}`, collapsibleState);
             this.connection = conn;
             this.isCategory = false;
             this.description = conn.environment;
-            this.tooltip = conn.url;
+            this.tooltip =
+                readinessIssues.length > 0
+                    ? `Incomplete required fields or credentials: ${readinessIssues.join(", ")}${conn.url ? `\n${conn.url}` : ""}`
+                    : conn.url;
             // Use environment color for the circle icon
             const envColor = conn.environmentColor ?? ENVIRONMENT_DEFAULT_COLORS[conn.environment] ?? "#0078d4";
             if (iconMgr) {
@@ -49,6 +53,9 @@ export class ConnectionTreeItem extends vscode.TreeItem {
                 this.iconPath = new vscode.ThemeIcon(isActive ? "circle-filled" : "circle-outline");
             }
             this.contextValue = isActive ? "pptb.connection.active" : "pptb.connection.inactive";
+            if (readinessIssues.length > 0) {
+                this.contextValue += ".incomplete";
+            }
             // Only offer "forget" when this connection actually has cached auth state to clear.
             const hasCachedAuthState = Boolean(conn.msalAccountId || conn.tokenExpiry || conn.powerPlatformTokenExpiry);
             if (hasCachedAuthState) {

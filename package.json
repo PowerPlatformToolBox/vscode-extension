@@ -380,7 +380,7 @@
       "view/item/context": [
         {
           "command": "pptb.connections.connect",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive(\\.remembered)?$/",
           "group": "inline@1"
         },
         {
@@ -395,7 +395,7 @@
         },
         {
           "command": "pptb.connections.connect",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive/",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.inactive(\\.remembered)?$/",
           "group": "1_connection@1"
         },
         {
@@ -415,7 +415,7 @@
         },
         {
           "command": "pptb.connections.forget",
-          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)\\.remembered$/",
+          "when": "view == pptb.connectionsView && viewItem =~ /^pptb\\.connection\\.(active|inactive)(\\.incomplete)?\\.remembered$/",
           "group": "2_manage@3"
         },
         {
@@ -520,6 +520,7 @@
     "publish": "npx @vscode/vsce publish",
     "compile-tests": "tsc -p . --outDir out",
     "test:registry": "npm run compile-tests && node --test test/registry.test.js",
+    "test:connections": "npm run compile-tests && node --test test/connections.test.js",
     "pretest": "npm run compile-tests",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "node ./out/test/runTest.js",

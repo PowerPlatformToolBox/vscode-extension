@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { ConnectionsManager } from "../managers/connectionsManager";
+import { getConnectionReadinessIssues, type ConnectionsManager } from "../managers/connectionsManager";
 
 /**
  * Left-aligned status bar item showing the active Dataverse connection.
@@ -57,9 +57,14 @@ export class ConnectionStatusBar {
     // ---------------------------------------------------------------------------
 
     private async showConnectionPicker(): Promise<void> {
-        const connections = this.connectionsManager.getAll();
-        if (connections.length === 0) {
+        const allConnections = this.connectionsManager.getAll();
+        if (allConnections.length === 0) {
             void vscode.window.showInformationMessage("No connections saved. Use PPTB: Add Connection to create one.");
+            return;
+        }
+        const connections = allConnections.filter((connection) => getConnectionReadinessIssues(connection).length === 0);
+        if (connections.length === 0) {
+            void vscode.window.showInformationMessage("No complete connections saved. Resolve any warnings on an imported connection.");
             return;
         }
 
