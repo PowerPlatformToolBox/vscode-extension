@@ -45,12 +45,13 @@ export class ConnectionTreeItem extends vscode.TreeItem {
                 readinessIssues.length > 0
                     ? `Incomplete required fields or credentials: ${readinessIssues.join(", ")}${conn.url ? `\n${conn.url}` : ""}`
                     : conn.url;
-            // Use environment color for the circle icon
-            const envColor = readinessIssues.length > 0 ? "#0078d4" : (conn.environmentColor ?? ENVIRONMENT_DEFAULT_COLORS[conn.environment] ?? "#0078d4");
-            if (iconMgr) {
+            if (readinessIssues.length > 0) {
+                this.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("problemsWarningIcon"));
+            } else if (iconMgr) {
+                const envColor = conn.environmentColor ?? ENVIRONMENT_DEFAULT_COLORS[conn.environment] ?? "#0078d4";
                 this.iconPath = iconMgr.getColoredCircleUri(envColor);
             } else {
-                this.iconPath = new vscode.ThemeIcon(readinessIssues.length > 0 || isActive ? "circle-filled" : "circle-outline", readinessIssues.length > 0 ? new vscode.ThemeColor("charts.blue") : undefined);
+                this.iconPath = new vscode.ThemeIcon(isActive ? "circle-filled" : "circle-outline");
             }
             this.contextValue = isActive ? "pptb.connection.active" : "pptb.connection.inactive";
             if (readinessIssues.length > 0) {
