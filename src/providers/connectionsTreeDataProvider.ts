@@ -37,7 +37,7 @@ export class ConnectionTreeItem extends vscode.TreeItem {
             const isActive = isActiveOrColor as boolean;
             const iconMgr = isCategoryOrIconMgr as IconCacheManager | undefined;
             const readinessIssues = getConnectionReadinessIssues(conn);
-            super(`${readinessIssues.length > 0 ? "$(warning) " : ""}${conn.name || "(Missing name)"}`, collapsibleState);
+            super(conn.name || "(Missing name)", collapsibleState);
             this.connection = conn;
             this.isCategory = false;
             this.description = conn.environment;
@@ -46,11 +46,11 @@ export class ConnectionTreeItem extends vscode.TreeItem {
                     ? `Incomplete required fields or credentials: ${readinessIssues.join(", ")}${conn.url ? `\n${conn.url}` : ""}`
                     : conn.url;
             // Use environment color for the circle icon
-            const envColor = conn.environmentColor ?? ENVIRONMENT_DEFAULT_COLORS[conn.environment] ?? "#0078d4";
+            const envColor = readinessIssues.length > 0 ? "#0078d4" : (conn.environmentColor ?? ENVIRONMENT_DEFAULT_COLORS[conn.environment] ?? "#0078d4");
             if (iconMgr) {
                 this.iconPath = iconMgr.getColoredCircleUri(envColor);
             } else {
-                this.iconPath = new vscode.ThemeIcon(isActive ? "circle-filled" : "circle-outline");
+                this.iconPath = new vscode.ThemeIcon(readinessIssues.length > 0 || isActive ? "circle-filled" : "circle-outline", readinessIssues.length > 0 ? new vscode.ThemeColor("charts.blue") : undefined);
             }
             this.contextValue = isActive ? "pptb.connection.active" : "pptb.connection.inactive";
             if (readinessIssues.length > 0) {
