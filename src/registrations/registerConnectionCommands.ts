@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { AuthManager } from "../managers/authManager";
 import { BrowserManager } from "../managers/browserManager";
-import { ConnectionsManager } from "../managers/connectionsManager";
+import { ConnectionsManager, getConnectionReadinessIssues } from "../managers/connectionsManager";
 import { ConnectionPanel } from "../panels/connectionPanel";
 import { ConnectionsTreeDataProvider, ConnectionTreeItem } from "../providers/connectionsTreeDataProvider";
 
@@ -44,6 +44,11 @@ export function registerConnectionCommands(
             void vscode.window.showWarningMessage("No connection selected.");
             return;
         }
+        const issues = getConnectionReadinessIssues(connection);
+        if (issues.length > 0) {
+            void vscode.window.showWarningMessage(`Cannot connect: incomplete required fields or credentials: ${issues.join(", ")}.`);
+            return;
+        }
         try {
             const connectionWithSecrets = (await connectionsManager.getWithSecrets(connection.id)) ?? connection;
             const token = await authManager.acquireToken(connectionWithSecrets);
@@ -79,6 +84,11 @@ export function registerConnectionCommands(
             void vscode.window.showWarningMessage("No connection selected.");
             return;
         }
+        const issues = getConnectionReadinessIssues(connection);
+        if (issues.length > 0) {
+            void vscode.window.showWarningMessage(`Cannot connect: incomplete required fields or credentials: ${issues.join(", ")}.`);
+            return;
+        }
         await connectionsManager.setActiveConnection(connection.id);
         void vscode.window.showInformationMessage(`"${connection.name}" is now the active connection.`);
     });
@@ -87,6 +97,11 @@ export function registerConnectionCommands(
         const connection = treeItem?.connection;
         if (!connection) {
             void vscode.window.showWarningMessage("No connection selected.");
+            return;
+        }
+        const issues = getConnectionReadinessIssues(connection);
+        if (issues.length > 0) {
+            void vscode.window.showWarningMessage(`Cannot test connection: incomplete required fields or credentials: ${issues.join(", ")}.`);
             return;
         }
         try {
