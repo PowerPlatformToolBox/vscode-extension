@@ -5,6 +5,8 @@ src/**
 webviews/**
 out/**
 node_modules/**
+pnpm-lock.yaml
+.changeset/**
 webpack.config.js
 .eslintrc.json
 .prettierrc.json

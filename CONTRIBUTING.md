@@ -17,8 +17,8 @@ Thank you for your interest in contributing! This guide explains how to set up y
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20 or higher
-- [npm](https://www.npmjs.com/) 10 or higher
+- [Node.js](https://nodejs.org/) 24 or higher
+- [pnpm](https://pnpm.io/) 11.0.0
 - [VS Code](https://code.visualstudio.com/) 1.85.0 or higher
 
 ## Development Setup
@@ -33,7 +33,7 @@ Thank you for your interest in contributing! This guide explains how to set up y
 2. Install dependencies:
 
     ```bash
-    npm install
+    pnpm install --frozen-lockfile
     ```
 
 3. Copy the environment template and fill in your values:
@@ -80,24 +80,24 @@ dist/                     # Compiled output (generated)
 
 ```bash
 # Development build (incremental)
-npm run compile
+pnpm compile
 
 # Watch mode (rebuilds on save)
-npm run watch
+pnpm watch
 
 # Production build
-npm run package
+pnpm package
 
 # Run ESLint
-npm run lint
+pnpm lint
 
 # Format with Prettier
-npm run format
+pnpm format
 ```
 
 ## Pull Request Guidelines
 
-1. Create a feature branch from `main`:
+1. Create a feature branch from `dev`:
 
     ```bash
     git checkout -b feat/my-feature
@@ -112,25 +112,16 @@ npm run format
 3. Ensure the following pass before opening a PR:
 
     ```bash
-    npm run lint
-    npm run package
+    pnpm lint
+    pnpm package
     ```
 
-4. Open a PR against `main` with a clear title and description of the changes.
+4. Add a Changeset with `pnpm changeset` and commit its generated file in `.changeset/`.
+5. Open a PR against `dev` with a clear title and description of the changes.
 
 ## Releasing
 
-Releases are automated via GitHub Actions. To trigger a release:
-
-1. Update the `version` field in `package.json`.
-2. Commit the version bump and push to `main`.
-3. Create and push a tag matching the new version:
-    ```bash
-    git tag v0.2.0
-    git push origin v0.2.0
-    ```
-
-The release workflow will automatically build, package, and publish the extension to the VS Code Marketplace.
+Releases are automated via GitHub Actions and Changesets. Merge a release PR from `dev` to `main`; the workflow creates or updates a `Version Packages` PR. After that PR is merged, GitHub Actions builds the package, publishes it to the VS Code Marketplace, and creates a GitHub Release.
 
 ## Reporting Issues
 

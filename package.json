@@ -3,6 +3,7 @@
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
   "version": "1.0.5",
+  "packageManager": "pnpm@11.0.0",
   "publisher": "PowerPlatformToolBox",
   "license": "GPL-3.0",
   "icon": "resources/icon.png",
@@ -512,19 +513,19 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool false",
     "compile-tests": "tsc -p . --outDir out",
-    "test:registry": "npm run compile-tests && node --test test/registry.test.js",
-    "test:connections": "npm run compile-tests && node --test test/connections.test.js",
-    "pretest": "npm run compile-tests",
+    "test:registry": "pnpm run compile-tests && node --test test/registry.test.js",
+    "test:connections": "pnpm run compile-tests && node --test test/connections.test.js",
+    "pretest": "pnpm run compile-tests",
     "lint": "eslint src --ext .ts,.tsx",
     "test": "node ./out/test/runTest.js",
     "format": "prettier --write src",
-    "version-stable": "npm version patch --no-git-tag-version",
-    "publish": "npx @vscode/vsce publish"
+    "changeset": "changeset",
+    "release:version": "changeset version",
+    "publish": "pnpm package && pnpm exec vsce publish --no-dependencies"
   },
   "dependencies": {
     "@azure/msal-node": "^3.8.10",
@@ -536,14 +537,16 @@
     "uuid": "^14.0.2"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "@vscode/vsce": "^4.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/uuid": "^10.0.0",
     "@types/vscode": "^1.85.0",
     "@types/webpack-env": "^1.18.4",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
+    "@typescript-eslint/parser": "^8.71.0",
     "css-loader": "^7.1.2",
     "dotenv": "^17.4.2",
     "eslint": "^8.57.1",
@@ -555,5 +558,10 @@
     "typescript": "^5.3.3",
     "webpack": "^5.90.1",
     "webpack-cli": "^5.1.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "uuid@8.3.2": "11.1.1"
+    }
   }
 }

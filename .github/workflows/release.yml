@@ -1,63 +1,108 @@
 name: Release
 
 on:
-    workflow_dispatch:
+    push:
+        branches: [main]
 
-permissions:
-    contents: write
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: false
 
 jobs:
-    release:
-        name: Package and Publish
+    select-release-mode:
+        name: Select Release Mode
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
-
+        permissions:
+            contents: read
+        outputs:
+            mode: ${{ steps.select.outputs.mode }}
         steps:
-            - name: Checkout repository
+            - name: Checkout code
               uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+            - name: Select release mode
+              id: select
+              uses: changesets/action/select-mode@v2
 
+    version:
+        name: Create or Update Version PR
+        needs: select-release-mode
+        if: needs.select-release-mode.outputs.mode == 'version'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 11.0.0
             - name: Set up Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
-                  cache: "npm"
-
+                  node-version: "24.x"
+                  cache: "pnpm"
             - name: Install dependencies
-              run: npm ci
+              run: pnpm install --frozen-lockfile
+            - name: Create or update version PR
+              uses: changesets/action/version@v2
+              with:
+                  github-token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
+                  script: pnpm run release:version
+                  pr-title: Version Packages
+                  commit-message: Version Packages
 
+    publish:
+        name: Build and Publish VS Code Extension
+        needs: select-release-mode
+        if: needs.select-release-mode.outputs.mode == 'publish'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 11.0.0
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24.x"
+                  cache: "pnpm"
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
             - name: Production build
-              run: npm run package
-
-            - name: Package VSIX
-              run: npx @vscode/vsce package --no-dependencies
+              run: pnpm package
               env:
                   PPTB_SUPABASE_URL: ${{ secrets.PPTB_SUPABASE_URL }}
                   PPTB_SUPABASE_ANON_KEY: ${{ secrets.PPTB_SUPABASE_ANON_KEY }}
-
-            - name: Upload VSIX artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: vsix
-                  path: "*.vsix"
-
+            - name: Package VSIX
+              run: pnpm exec vsce package --no-dependencies
+              env:
+                  PPTB_SUPABASE_URL: ${{ secrets.PPTB_SUPABASE_URL }}
+                  PPTB_SUPABASE_ANON_KEY: ${{ secrets.PPTB_SUPABASE_ANON_KEY }}
+            - name: Publish to VS Code Marketplace
+              run: pnpm exec vsce publish --no-dependencies --packagePath *.vsix
+              env:
+                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
             - name: Get package version
               id: package-version
-              run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
+              run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v2
               with:
+                  token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
                   tag_name: v${{ steps.package-version.outputs.version }}
+                  name: Release v${{ steps.package-version.outputs.version }}
                   files: "*.vsix"
                   generate_release_notes: true
-
-            - name: Publish to VS Code Marketplace
-              run: npx @vscode/vsce publish --no-dependencies --packagePath *.vsix
-              env:
-                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
-
-            # TODO: for future rollout
-            # - name: Publish to Open VSX Registry
-            #   run: npx ovsx publish *.vsix
-            #   env:
-            #       OVSX_PAT: ${{ secrets.OVSX_PAT }}
-            #   continue-on-error: true
