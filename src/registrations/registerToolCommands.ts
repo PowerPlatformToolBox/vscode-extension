@@ -89,6 +89,12 @@ export function registerToolCommands(
         }
         ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, { connectionsManager, dataverseManager });
     });
+    const launchToolWithImpersonationCmd = vscode.commands.registerCommand("pptb.tools.launchWithImpersonation", (item?: InstalledToolTreeItem) => {
+        if (!item?.tool.id) {
+            return;
+        }
+        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, { connectionsManager, dataverseManager }, "impersonated");
+    });
 
     const revokeCspConsentCmd = vscode.commands.registerCommand("pptb.tools.revokeCspConsent", async (item?: InstalledToolTreeItem) => {
         if (!item?.tool) {
@@ -338,6 +344,7 @@ export function registerToolCommands(
         refreshMarketplaceCmd,
         showMarketplaceDetailsCmd,
         launchToolCmd,
+        launchToolWithImpersonationCmd,
         revokeCspConsentCmd,
         managePermissionsCmd,
         browseToolsCmd,

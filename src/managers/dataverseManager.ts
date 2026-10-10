@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import { AsyncLocalStorage } from "async_hooks";
 import { DATAVERSE_API_VERSION } from "../constants";
 import type { Connection } from "./connectionsManager";
 import type { AuthManager } from "./authManager";
@@ -41,6 +42,20 @@ export interface FetchXmlResult {
     "@Microsoft.Dynamics.CRM.fetchxmlpagingcookie"?: string;
 }
 
+export interface DataverseUser {
+    systemuserid: string;
+    azureactivedirectoryobjectid: string;
+    fullname: string;
+    domainname?: string;
+    internalemailaddress?: string;
+    isdisabled?: boolean;
+}
+
+export interface DataverseUserPage {
+    users: DataverseUser[];
+    nextLink: string | null;
+}
+
 export interface ExecuteRequest {
     operationName: string;
     operationType: "action" | "function";
@@ -65,6 +80,7 @@ export type EntityRelatedMetadataPath = string;
  */
 export class DataverseManager {
     private readonly authManager: AuthManager;
+    private readonly callerObjectId = new AsyncLocalStorage<string>();
 
     constructor(authManager: AuthManager) {
         this.authManager = authManager;
@@ -90,19 +106,73 @@ export class DataverseManager {
     private async request<T>(connection: Connection, config: AxiosRequestConfig): Promise<T> {
         let token = await this.authManager.acquireToken(connection);
         const client = this.buildClient(connection, token);
+        const requestConfig = this.withCallerObjectId(config);
         try {
-            const response = await client.request<T>(config);
+            const response = await client.request<T>(requestConfig);
             return response.data;
         } catch (err: unknown) {
             if (axios.isAxiosError(err) && err.response?.status === 401) {
                 // Retry once with a fresh token
                 token = await this.authManager.refreshToken(connection);
                 const retryClient = this.buildClient(connection, token);
-                const retryResponse = await retryClient.request<T>(config);
+                const retryResponse = await retryClient.request<T>(requestConfig);
                 return retryResponse.data;
             }
             throw err;
         }
+    }
+
+    /** Keep caller identity scoped to the current async request chain. */
+    withImpersonation<T>(callerObjectId: string | undefined, operation: () => Promise<T>): Promise<T> {
+        return callerObjectId ? this.callerObjectId.run(callerObjectId, operation) : operation();
+    }
+
+    async searchSystemUsers(connection: Connection, search = "", nextLink?: string): Promise<DataverseUserPage> {
+        const term = search.trim();
+        if (term.length > 200) {
+            throw new Error("User search must be 200 characters or fewer.");
+        }
+
+        const baseUrl = `${connection.url.replace(/\/$/, "")}/api/data/${DATAVERSE_API_VERSION}/systemusers`;
+        const url = new URL(baseUrl);
+        url.searchParams.set("$select", "systemuserid,azureactivedirectoryobjectid,fullname,domainname,internalemailaddress,isdisabled");
+        url.searchParams.set(
+            "$filter",
+            `isdisabled eq false and azureactivedirectoryobjectid ne null${term ? ` and (contains(fullname,'${term.replace(/'/g, "''")}') or contains(internalemailaddress,'${term.replace(/'/g, "''")}'))` : ""}`,
+        );
+        url.searchParams.set("$orderby", "fullname,systemuserid");
+
+        let requestUrl = url;
+        if (nextLink) {
+            const cursor = new URL(nextLink, url);
+            if (
+                cursor.origin !== url.origin ||
+                cursor.pathname !== url.pathname ||
+                cursor.hash !== "" ||
+                cursor.searchParams.getAll("$skiptoken").length !== 1 ||
+                [...url.searchParams].some(([key, value]) => cursor.searchParams.getAll(key).length !== 1 || cursor.searchParams.get(key) !== value) ||
+                [...cursor.searchParams.keys()].some((key) => !url.searchParams.has(key) && key !== "$skiptoken")
+            ) {
+                throw new Error("Invalid Dataverse user search continuation.");
+            }
+            requestUrl = cursor;
+        }
+
+        const result = await this.request<{ value: DataverseUser[]; "@odata.nextLink"?: string }>(connection, {
+            method: "GET",
+            url: requestUrl.toString(),
+            headers: { Prefer: "odata.maxpagesize=50" },
+        });
+
+        return {
+            users: result.value,
+            nextLink: result["@odata.nextLink"] ?? null,
+        };
+    }
+
+    private withCallerObjectId(config: AxiosRequestConfig): AxiosRequestConfig {
+        const callerObjectId = this.callerObjectId.getStore();
+        return callerObjectId ? { ...config, headers: { ...config.headers, CallerObjectId: callerObjectId } } : config;
     }
 
     // ---------------------------------------------------------------------------

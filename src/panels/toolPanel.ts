@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import { TOOL_SETTINGS_KEY_PREFIX } from "../constants";
 import type { Connection, ConnectionsManager } from "../managers/connectionsManager";
 import { CspConsentManager } from "../managers/cspConsentManager";
-import type { DataverseManager } from "../managers/dataverseManager";
+import type { DataverseManager, DataverseUser } from "../managers/dataverseManager";
 import type { PowerPlatformManager } from "../managers/powerPlatformManager";
 import { TerminalManager } from "../managers/terminalManager";
 import { ToolManager } from "../managers/toolManager";
@@ -58,6 +58,8 @@ type OpenManagers = {
     powerPlatformManager?: PowerPlatformManager;
 };
 
+type ToolLaunchMode = "impersonated";
+
 /**
  * Manages a WebviewPanel that hosts a single tool's UI.
  * Multiple instances may be open simultaneously (one per tool).
@@ -75,6 +77,7 @@ export class ToolPanel {
     private readonly dataverseManager?: DataverseManager;
     private readonly powerPlatformManager?: PowerPlatformManager;
     private readonly secondaryConnectionStatusBar?: vscode.StatusBarItem;
+    private readonly impersonatedUsers: Partial<Record<"primary" | "secondary", DataverseUser>> = {};
 
     private toolContext: ToolContext;
 
@@ -92,6 +95,7 @@ export class ToolPanel {
         managers?: OpenManagers,
         multiConnectionMode: "required" | "optional" | "none" = "none",
         initialContext?: Partial<Pick<ToolContext, "connectionId" | "connectionUrl" | "secondaryConnectionId" | "secondaryConnectionUrl">>,
+        initialImpersonatedUsers?: Partial<Record<"primary" | "secondary", DataverseUser>>,
     ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
@@ -102,6 +106,7 @@ export class ToolPanel {
         this.connectionsManager = managers?.connectionsManager;
         this.dataverseManager = managers?.dataverseManager;
         this.powerPlatformManager = managers?.powerPlatformManager;
+        Object.assign(this.impersonatedUsers, initialImpersonatedUsers);
 
         this.toolContext = {
             toolId,
@@ -176,8 +181,9 @@ export class ToolPanel {
         toolRegistryManager: ToolRegistryManager,
         cspConsentManager: CspConsentManager,
         managers?: OpenManagers,
+        launchMode?: ToolLaunchMode,
     ): void {
-        ToolPanel.openAsync(extensionUri, context, toolId, toolManager, toolRegistryManager, cspConsentManager, managers).catch((err: unknown) => {
+        ToolPanel.openAsync(extensionUri, context, toolId, toolManager, toolRegistryManager, cspConsentManager, managers, launchMode).catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
             logger.error("ToolPanel.open error:", msg);
         });
@@ -191,11 +197,14 @@ export class ToolPanel {
         toolRegistryManager: ToolRegistryManager,
         cspConsentManager: CspConsentManager,
         managers?: OpenManagers,
+        launchMode?: ToolLaunchMode,
     ): Promise<void> {
         const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : vscode.ViewColumn.One;
-
         const existing = ToolPanel.panels.get(toolId);
         if (existing) {
+            if (launchMode === "impersonated") {
+                await existing.configureImpersonation(true);
+            }
             existing.panel.reveal(column ?? vscode.ViewColumn.One);
             return;
         }
@@ -245,6 +254,9 @@ export class ToolPanel {
                 }
             }
 
+            const impersonatedUsers =
+                launchMode === "impersonated" ? await ToolPanel.selectImpersonatedUsers(managers.connectionsManager, managers.dataverseManager, activeConnection.id, secondaryConnectionId) : {};
+
             const title = tool ? `PPTB Tool — ${tool.name}` : "PPTB Tool";
 
             // Build an explicit file: URI for localResourceRoots so that the webview
@@ -258,8 +270,13 @@ export class ToolPanel {
                 retainContextWhenHidden: true,
             });
 
-            const initialContext: Partial<ToolContext> = { secondaryConnectionId, secondaryConnectionUrl };
-            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode, initialContext));
+            const initialContext: Partial<ToolContext> = {
+                connectionId: activeConnection.id,
+                connectionUrl: activeConnection.url,
+                secondaryConnectionId,
+                secondaryConnectionUrl,
+            };
+            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode, initialContext, impersonatedUsers));
             return;
         }
 
@@ -274,6 +291,49 @@ export class ToolPanel {
         });
 
         ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode));
+    }
+
+    private static async selectImpersonatedUsers(
+        connectionsManager: ConnectionsManager,
+        dataverseManager: DataverseManager | undefined,
+        primaryConnectionId: string,
+        secondaryConnectionId: string | null,
+    ): Promise<Partial<Record<"primary" | "secondary", DataverseUser>>> {
+        const users: Partial<Record<"primary" | "secondary", DataverseUser>> = {};
+        const primary = await connectionsManager.getWithSecrets(primaryConnectionId);
+        const primaryUser = primary ? await ToolPanel.promptImpersonationUser(dataverseManager, primary, "primary") : undefined;
+        if (primaryUser) {
+            users.primary = primaryUser;
+        }
+
+        if (secondaryConnectionId) {
+            const secondary = await connectionsManager.getWithSecrets(secondaryConnectionId);
+            const secondaryUser = secondary ? await ToolPanel.promptImpersonationUser(dataverseManager, secondary, "secondary") : undefined;
+            if (secondaryUser) {
+                users.secondary = secondaryUser;
+            }
+        }
+        return users;
+    }
+
+    private async configureImpersonation(enabled: boolean): Promise<void> {
+        delete this.impersonatedUsers.primary;
+        delete this.impersonatedUsers.secondary;
+        if (!enabled || !this.connectionsManager) {
+            return;
+        }
+
+        const primary = await this.getConnection("primary");
+        const primaryUser = primary ? await ToolPanel.promptImpersonationUser(this.dataverseManager, primary, "primary") : undefined;
+        if (primaryUser) {
+            this.impersonatedUsers.primary = primaryUser;
+        }
+
+        const secondary = await this.getConnection("secondary");
+        const secondaryUser = secondary ? await ToolPanel.promptImpersonationUser(this.dataverseManager, secondary, "secondary") : undefined;
+        if (secondaryUser) {
+            this.impersonatedUsers.secondary = secondaryUser;
+        }
     }
 
     /**
@@ -327,6 +387,99 @@ export class ToolPanel {
         }
 
         return { id: picked.connectionId, url: picked.connectionUrl! };
+    }
+
+    private static async promptImpersonationUser(dataverseManager: DataverseManager | undefined, connection: Connection, target: "primary" | "secondary"): Promise<DataverseUser | undefined> {
+        if (!dataverseManager) {
+            return undefined;
+        }
+
+        type UserPickItem = vscode.QuickPickItem & { user?: DataverseUser; loadMore?: boolean };
+        const quickPick = vscode.window.createQuickPick<UserPickItem>();
+        quickPick.title = `Impersonation (${target} connection) - ${connection.name}`;
+        quickPick.placeholder = "Type a name or email to search Dataverse users";
+        quickPick.matchOnDescription = true;
+        quickPick.matchOnDetail = true;
+
+        return new Promise((resolve) => {
+            let users: DataverseUser[] = [];
+            let nextLink: string | null = null;
+            let currentSearch = "";
+            let requestId = 0;
+            let debounce: ReturnType<typeof setTimeout> | undefined;
+            let resolved = false;
+
+            const finish = (user?: DataverseUser): void => {
+                if (resolved) return;
+                resolved = true;
+                if (debounce) clearTimeout(debounce);
+                quickPick.dispose();
+                resolve(user);
+            };
+
+            const updateItems = (): void => {
+                const items: UserPickItem[] = users.map((user) => ({
+                    label: user.fullname,
+                    description: user.internalemailaddress ?? user.domainname ?? user.azureactivedirectoryobjectid,
+                    detail: user.systemuserid,
+                    user,
+                }));
+                if (nextLink) {
+                    items.push({ label: "$(more) Load more users", description: "Fetch the next page of matching users", loadMore: true, alwaysShow: true });
+                }
+                quickPick.items = items;
+            };
+
+            const loadUsers = async (search: string, append: boolean, cursor?: string): Promise<void> => {
+                const activeRequestId = ++requestId;
+                if (!append) {
+                    currentSearch = search;
+                    users = [];
+                    nextLink = null;
+                    updateItems();
+                }
+                quickPick.busy = true;
+                try {
+                    const page = await dataverseManager.searchSystemUsers(connection, search, cursor);
+                    if (resolved || activeRequestId !== requestId) return;
+                    users = append ? [...users, ...page.users] : page.users;
+                    nextLink = page.nextLink;
+                    updateItems();
+                    if (users.length === 0) {
+                        quickPick.placeholder = "No matching users; change the search text to try again";
+                    } else {
+                        quickPick.placeholder = "Type a name or email to refine the search, or select a user";
+                    }
+                } catch (error: unknown) {
+                    if (resolved || activeRequestId !== requestId) return;
+                    const message = error instanceof Error ? error.message : String(error);
+                    quickPick.items = [{ label: "Could not load users", description: message }];
+                    quickPick.placeholder = "Change the search text to try again";
+                } finally {
+                    if (activeRequestId === requestId) quickPick.busy = false;
+                }
+            };
+
+            quickPick.onDidChangeValue((value): void => {
+                if (debounce) clearTimeout(debounce);
+                debounce = setTimeout(() => void loadUsers(value.trim(), false), 300);
+            });
+
+            quickPick.onDidAccept((): void => {
+                const selected = quickPick.selectedItems[0];
+                if (selected?.user) {
+                    finish(selected.user);
+                    return;
+                }
+                if (selected?.loadMore && nextLink) {
+                    void loadUsers(currentSearch, true, nextLink);
+                }
+            });
+
+            quickPick.onDidHide((): void => finish());
+            quickPick.show();
+            void loadUsers("", false);
+        });
     }
 
     dispose(toolId: string): void {
@@ -802,13 +955,14 @@ export class ToolPanel {
         const hasConnectionTargetArg = this.hasConnectionTargetArg(args);
         const connectionTarget = hasConnectionTargetArg ? (args[args.length - 1] as "primary" | "secondary") : "primary";
         const trimmedArgs = hasConnectionTargetArg ? args.slice(0, -1) : args;
+        const callerObjectId = this.impersonatedUsers[connectionTarget]?.azureactivedirectoryobjectid;
 
         const connection = await this.getConnection(connectionTarget);
         if (!connection) {
             throw new Error(`No ${connectionTarget} connection available.`);
         }
 
-        return (fn as (...params: unknown[]) => unknown).apply(this.dataverseManager, [connection, ...trimmedArgs]);
+        return this.dataverseManager.withImpersonation(callerObjectId, () => Promise.resolve((fn as (...params: unknown[]) => unknown).apply(this.dataverseManager, [connection, ...trimmedArgs])));
     }
 
     private hasConnectionTargetArg(args: unknown[]): boolean {
@@ -867,10 +1021,7 @@ export class ToolPanel {
         const id = target === "primary" ? this.toolContext.connectionId : this.toolContext.secondaryConnectionId;
 
         if (typeof id === "string" && id.length > 0) {
-            const byId = await this.connectionsManager.getWithSecrets(id);
-            if (byId) {
-                return byId;
-            }
+            return this.connectionsManager.getWithSecrets(id);
         }
 
         if (target === "primary") {
@@ -909,6 +1060,13 @@ export class ToolPanel {
     }
 
     private setToolContext(next: Partial<ToolContext> | undefined): void {
+        if (next?.connectionId !== undefined && next.connectionId !== this.toolContext.connectionId) {
+            delete this.impersonatedUsers.primary;
+        }
+        if (next?.secondaryConnectionId !== undefined && next.secondaryConnectionId !== this.toolContext.secondaryConnectionId) {
+            delete this.impersonatedUsers.secondary;
+        }
+
         this.toolContext = {
             ...this.toolContext,
             ...(next ?? {}),
