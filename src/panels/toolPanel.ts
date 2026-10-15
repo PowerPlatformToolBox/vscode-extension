@@ -154,6 +154,8 @@ export class ToolPanel {
             );
         }
 
+        this.updateImpersonationBanner();
+
         this.disposables.push(
             this.terminalManager.onTerminalOutput(({ terminalId, data }) => {
                 this.pushEvent("terminal:output", { terminalId, data });
@@ -319,6 +321,7 @@ export class ToolPanel {
     private async configureImpersonation(enabled: boolean): Promise<void> {
         delete this.impersonatedUsers.primary;
         delete this.impersonatedUsers.secondary;
+        this.updateImpersonationBanner();
         if (!enabled || !this.connectionsManager) {
             return;
         }
@@ -334,6 +337,7 @@ export class ToolPanel {
         if (secondaryUser) {
             this.impersonatedUsers.secondary = secondaryUser;
         }
+        this.updateImpersonationBanner();
     }
 
     /**
@@ -553,7 +557,11 @@ export class ToolPanel {
                 const cspSource = this.panel.webview.cspSource;
                 const csp = buildToolCsp(cspSource, tool.cspExceptions);
 
-                const injection = `<meta http-equiv="Content-Security-Policy" content="${csp}">\n` + `<base href="${baseUri}/">\n` + `<script>\n${polyfillContent}\n</script>`;
+                const injection =
+                    `<meta http-equiv="Content-Security-Policy" content="${csp}">\n` +
+                    `<base href="${baseUri}/">\n` +
+                    `<style>${this.getImpersonationBannerStyles()}</style>\n` +
+                    `<script>\n${polyfillContent}\n${this.getImpersonationBannerScript()}\n</script>`;
 
                 if (/<head[^>]*>/i.test(html)) {
                     html = html.replace(/(<head[^>]*>)/i, `$1\n${injection}`);
@@ -589,6 +597,82 @@ export class ToolPanel {
   </div>
 </body>
 </html>`;
+    }
+
+    private getImpersonationBannerStyles(): string {
+        return `
+            #pptb-impersonation-banner {
+                display: flex;
+                align-items: center;
+                min-height: 32px;
+                box-sizing: border-box;
+                padding: 6px 12px;
+                background: var(--vscode-statusBar-background, var(--vscode-button-background, #742774));
+                color: var(--vscode-statusBar-foreground, var(--vscode-button-foreground, #fff));
+                font: 500 12px/20px var(--vscode-font-family, sans-serif);
+                overflow-wrap: anywhere;
+            }
+            #pptb-impersonation-banner[hidden] {
+                display: none;
+            }
+        `;
+    }
+
+    private getImpersonationBannerScript(): string {
+        const initialUsers = JSON.stringify({
+            primary: this.impersonatedUsers.primary?.fullname ?? null,
+            secondary: this.impersonatedUsers.secondary?.fullname ?? null,
+        }).replace(/</g, "\\u003c");
+
+        return `
+            (() => {
+                const bannerId = "pptb-impersonation-banner";
+                let currentUsers = ${initialUsers};
+                const updateBanner = (users) => {
+                    currentUsers = users || {};
+                    const banner = document.getElementById(bannerId);
+                    const primaryName = typeof currentUsers.primary === "string" ? currentUsers.primary : "";
+                    const secondaryName = typeof currentUsers.secondary === "string" ? currentUsers.secondary : "";
+                    const labels = [primaryName && "Primary: " + primaryName, secondaryName && "Secondary: " + secondaryName].filter(Boolean);
+                    if (!banner) return;
+                    banner.textContent = labels.length ? "Dataverse impersonation active - " + labels.join(", ") : "";
+                    banner.hidden = labels.length === 0;
+                };
+                const addBanner = () => {
+                    if (!document.body || document.getElementById(bannerId)) return;
+                    const banner = document.createElement("div");
+                    banner.id = bannerId;
+                    banner.setAttribute("role", "status");
+                    banner.setAttribute("aria-live", "polite");
+                    banner.hidden = true;
+                    document.body.insertBefore(banner, document.body.firstChild);
+                    updateBanner(currentUsers);
+                };
+                const receive = (event) => {
+                    if (event.data?.source === "pptb-host" && event.data.type === "pptb:impersonation") {
+                        addBanner();
+                        updateBanner(event.data.users);
+                    }
+                };
+                window.addEventListener("message", receive);
+                if (document.readyState === "loading") {
+                    document.addEventListener("DOMContentLoaded", addBanner, { once: true });
+                } else {
+                    addBanner();
+                }
+            })();
+        `;
+    }
+
+    private updateImpersonationBanner(): void {
+        void this.panel.webview.postMessage({
+            source: "pptb-host",
+            type: "pptb:impersonation",
+            users: {
+                primary: this.impersonatedUsers.primary?.fullname ?? null,
+                secondary: this.impersonatedUsers.secondary?.fullname ?? null,
+            },
+        });
     }
 
     private async handleApiRequest(message: ApiMessage): Promise<void> {
@@ -1078,6 +1162,7 @@ export class ToolPanel {
         };
 
         this.updateSecondaryConnectionStatusBar();
+        this.updateImpersonationBanner();
 
         void this.panel.webview.postMessage({
             source: "pptb-host",
