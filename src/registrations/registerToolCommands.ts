@@ -5,6 +5,7 @@ import { DataverseManager } from "../managers/dataverseManager";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
+import type { PowerPlatformManager } from "../managers/powerPlatformManager";
 import { CspPermissionsPanel } from "../panels/cspPermissionsPanel";
 import { ToolHostPanel } from "../panels/toolHostPanel";
 import { ToolPanel } from "../panels/toolPanel";
@@ -23,7 +24,9 @@ export function registerToolCommands(
     marketplaceProvider: MarketplaceTreeDataProvider,
     iconCacheManager: IconCacheManager,
     cspConsentManager: CspConsentManager,
+    powerPlatformManager: PowerPlatformManager,
 ): vscode.Disposable[] {
+    const managers = { connectionsManager, dataverseManager, powerPlatformManager };
     const refreshInstalledCmd = vscode.commands.registerCommand("pptb.tools.refresh", () => installedToolsProvider.refresh());
 
     const showInstalledDetailsCmd = vscode.commands.registerCommand("pptb.tools.showDetails", async (item?: InstalledToolTreeItem) => {
@@ -36,7 +39,7 @@ export function registerToolCommands(
             vscode.window.showWarningMessage(`Details for "${item.tool.name}" are not available in the registry.`);
             return;
         }
-        await ToolDetailPanel.open(context.extensionUri, context, toolManager, toolRegistryManager, iconCacheManager, cspConsentManager, { connectionsManager, dataverseManager }, registryTool, item.tool);
+        await ToolDetailPanel.open(context.extensionUri, context, toolManager, toolRegistryManager, iconCacheManager, cspConsentManager, managers, registryTool, item.tool);
     });
 
     const toolFeedbackCmd = vscode.commands.registerCommand("pptb.tools.feedback", async (item?: InstalledToolTreeItem) => {
@@ -80,14 +83,20 @@ export function registerToolCommands(
             return;
         }
         const installed = toolManager.getById(item.registryTool.id);
-        await ToolDetailPanel.open(context.extensionUri, context, toolManager, toolRegistryManager, iconCacheManager, cspConsentManager, { connectionsManager, dataverseManager }, item.registryTool, installed);
+        await ToolDetailPanel.open(context.extensionUri, context, toolManager, toolRegistryManager, iconCacheManager, cspConsentManager, managers, item.registryTool, installed);
     });
 
     const launchToolCmd = vscode.commands.registerCommand("pptb.tools.launch", (item?: InstalledToolTreeItem) => {
         if (!item?.tool.id) {
             return;
         }
-        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, { connectionsManager, dataverseManager });
+        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, managers);
+    });
+    const launchToolWithImpersonationCmd = vscode.commands.registerCommand("pptb.tools.launchWithImpersonation", (item?: InstalledToolTreeItem) => {
+        if (!item?.tool.id) {
+            return;
+        }
+        ToolPanel.open(context.extensionUri, context, item.tool.id, toolManager, toolRegistryManager, cspConsentManager, managers, "impersonated");
     });
 
     const revokeCspConsentCmd = vscode.commands.registerCommand("pptb.tools.revokeCspConsent", async (item?: InstalledToolTreeItem) => {
@@ -108,17 +117,11 @@ export function registerToolCommands(
     });
 
     const browseToolsCmd = vscode.commands.registerCommand("pptb.tools.browse", () => {
-        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "installed", {
-            connectionsManager,
-            dataverseManager,
-        });
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "installed", managers);
     });
 
     const browseMarketplaceCmd = vscode.commands.registerCommand("pptb.marketplace.browse", () => {
-        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "marketplace", {
-            connectionsManager,
-            dataverseManager,
-        });
+        ToolHostPanel.open(context.extensionUri, context, toolRegistryManager, toolManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, "marketplace", managers);
     });
 
     const marketplaceUninstallCmd = vscode.commands.registerCommand("pptb.marketplace.uninstall", async (item?: MarketplaceToolTreeItem) => {
@@ -338,6 +341,7 @@ export function registerToolCommands(
         refreshMarketplaceCmd,
         showMarketplaceDetailsCmd,
         launchToolCmd,
+        launchToolWithImpersonationCmd,
         revokeCspConsentCmd,
         managePermissionsCmd,
         browseToolsCmd,

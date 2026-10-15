@@ -1,6 +1,7 @@
 import axios, { AxiosError } from "axios";
 import type { AuthManager } from "./authManager";
 import type { Connection } from "./connectionsManager";
+import type { ConnectionTarget } from "../utils/connectionSlots";
 
 export type PowerPlatformNamespace =
     | "Analytics"
@@ -46,10 +47,10 @@ type AcquireTokenFn = (connection: Connection, scopes?: string[]) => Promise<str
 
 export class PowerPlatformManager {
     private readonly authManager: AuthManager;
-    private readonly resolveConnection: (target: "primary" | "secondary") => Promise<ConnectionWithPowerPlatformSettings | undefined>;
+    private readonly resolveConnection?: (target: ConnectionTarget) => Promise<ConnectionWithPowerPlatformSettings | undefined>;
     private readonly tokenCache = new Map<string, string>();
 
-    constructor(authManager: AuthManager, resolveConnection: (target: "primary" | "secondary") => Promise<ConnectionWithPowerPlatformSettings | undefined>) {
+    constructor(authManager: AuthManager, resolveConnection?: (target: ConnectionTarget) => Promise<ConnectionWithPowerPlatformSettings | undefined>) {
         this.authManager = authManager;
         this.resolveConnection = resolveConnection;
     }
@@ -59,24 +60,37 @@ export class PowerPlatformManager {
         method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
         path = "",
         body: unknown = undefined,
-        connectionTarget: "primary" | "secondary" = "primary",
+        connectionTarget: ConnectionTarget = "primary",
         headers: Record<string, string> = {},
     ): Promise<unknown> {
-        const normalizedNamespace = this.normalizeNamespace(namespace);
+        if (typeof connectionTarget === "number" && (!Number.isInteger(connectionTarget) || connectionTarget < 0)) {
+            throw new RangeError(`Invalid connection target: ${connectionTarget}`);
+        }
+        if (!this.resolveConnection) throw new Error("Power Platform connection resolver is not configured.");
         const connection = await this.resolveConnection(connectionTarget);
 
         if (!connection) {
-            throw new Error(`No ${connectionTarget} connection available.`);
+            throw new Error(`No ${typeof connectionTarget === "number" ? `connection slot ${connectionTarget + 1}` : connectionTarget} connection available.`);
         }
 
+        return this.requestWithConnection(connection, namespace, method, path, body, headers);
+    }
+
+    async requestWithConnection(
+        connection: ConnectionWithPowerPlatformSettings,
+        namespace: string,
+        method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+        path = "",
+        body: unknown = undefined,
+        headers: Record<string, string> = {},
+    ): Promise<unknown> {
         if (connection.enabledForPowerPlatformAPI !== true) {
             throw new Error("Power Platform API is not enabled for this connection. Enable it in connection settings and ensure a Client ID is configured.");
         }
-
+        const normalizedNamespace = this.normalizeNamespace(namespace);
         const scopes = this.resolveScopes(connection);
         const cacheKey = this.createCacheKey(connection.id, scopes);
         const token = await this.getToken(connection, scopes, cacheKey);
-
         try {
             return await this.makeRequest(normalizedNamespace, method, path, body, token, headers);
         } catch (error: unknown) {

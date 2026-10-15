@@ -195,7 +195,7 @@ export class ToolHostPanel {
                 if (!message.toolId || !connectionsManager || !dataverseManager) break;
                 const registryTool = await this.toolRegistryManager.getToolById(message.toolId);
                 if (registryTool) {
-                    await ToolDetailPanel.open(this.extensionUri, this.context, this.toolManager, this.toolRegistryManager, this.iconCacheManager, this.cspConsentManager, { connectionsManager, dataverseManager }, registryTool, this.toolManager.getById(message.toolId));
+                    await ToolDetailPanel.open(this.extensionUri, this.context, this.toolManager, this.toolRegistryManager, this.iconCacheManager, this.cspConsentManager, { connectionsManager, dataverseManager, powerPlatformManager: this.managers?.powerPlatformManager }, registryTool, this.toolManager.getById(message.toolId));
                 }
                 break;
             }

@@ -4,13 +4,14 @@ import * as vscode from "vscode";
 import type { ConnectionsManager } from "../managers/connectionsManager";
 import type { CspConsentManager } from "../managers/cspConsentManager";
 import type { DataverseManager } from "../managers/dataverseManager";
+import type { PowerPlatformManager } from "../managers/powerPlatformManager";
 import type { IconCacheManager } from "../managers/iconCacheManager";
 import type { InstalledTool, ToolManager } from "../managers/toolManager";
 import type { RegistryTool, ToolRegistryManager } from "../managers/toolRegistryManager";
 import { getNonce, getThemeAssetUris, type ThemeAssetUris } from "../utils/webview";
 import { ToolPanel } from "./toolPanel";
 
-type Managers = { connectionsManager: ConnectionsManager; dataverseManager: DataverseManager };
+type Managers = { connectionsManager: ConnectionsManager; dataverseManager: DataverseManager; powerPlatformManager?: PowerPlatformManager };
 type IconSource = string | { light: string; dark: string };
 
 export interface ToolDetailModel {
@@ -24,6 +25,7 @@ export interface ToolDetailModel {
     categories?: string[];
     multiConnection?: RegistryTool["multiConnection"];
     connectionRequirement?: RegistryTool["connectionRequirement"];
+    features?: RegistryTool["features"];
     enabledForPowerPlatformAPI?: boolean;
     mcpEnabled?: boolean;
     maturityStatus?: string;
@@ -120,7 +122,7 @@ export class ToolDetailPanel {
         };
     }
 
-    private async handleMessage(message: { type: string; url?: string }): Promise<void> {
+    private async handleMessage(message: { type: string; url?: string; toolId?: string }): Promise<void> {
         try {
             switch (message.type) {
                 case "ready":
@@ -171,6 +173,7 @@ export class ToolDetailPanel {
             categories: this.model.categories,
             multiConnection: this.model.multiConnection,
             connectionRequirement: this.model.connectionRequirement,
+            features: this.model.features,
             enabledForPowerPlatformAPI: this.model.enabledForPowerPlatformAPI,
             mcpEnabled: this.model.mcpEnabled,
             maturityStatus: this.model.maturityStatus,

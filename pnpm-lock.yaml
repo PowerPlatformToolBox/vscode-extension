@@ -12,8 +12,8 @@ importers:
         specifier: ^3.8.10
         version: 3.8.10
       '@pptb/types':
-        specifier: 1.2.5
-        version: 1.2.5
+        specifier: ^1.2.7
+        version: 1.2.7
       '@supabase/supabase-js':
         specifier: ^2.112.4
         version: 2.117.2
@@ -389,12 +389,12 @@ packages:
     resolution: {integrity: sha512-pOr5+q1fLYKwFN3LAJuGZEnfXDcQ73zqgDHMtGy+K+uIoUqyY+6MeDCWFwfu+4EFuq76I5EPFofoNAI+Bmmq4A==}
     engines: {node: '>=22.13'}
 
-  '@pptb/types@1.2.5':
-    resolution: {integrity: sha512-DDTl1gJ2xuZaF1fSQUSL61+KHvwmNMZhJwfvJzxxKlxqN+juv7THrZC+ewjaHsZaQo9LHgxhCDKDTwV/quTf8Q==}
+  '@pptb/types@1.2.7':
+    resolution: {integrity: sha512-5ZjydNzwu/S13/obpADCC5bfVIR81mITZXxezwj5eLl2L528lzfGV/gU7w9M5ViZBr89+eFAkH1aDXIZ64o9qQ==}
     hasBin: true
 
-  '@pptb/validate@0.0.2':
-    resolution: {integrity: sha512-QsuimcuDgEbblqC4uAeXE+ONm5KJ5twKbGFh9d8e4leF2jsISgVpVzYPgivSLUA9iomDGmMnXcklHPgb4jEf1A==}
+  '@pptb/validate@1.0.5':
+    resolution: {integrity: sha512-zi5WUWAnWm/JFf4oq3ffoeyEpVwV/8qHy+oaJ95kvi+QYnpDqXFFi0uoTt1pBGI+G1Ws6ljmEtxfGbxn/bAhhA==}
     hasBin: true
 
   '@secretlint/core@10.2.2':
@@ -2295,11 +2295,11 @@ snapshots:
 
   '@pnpm/deps.graph-sequencer@1100.0.1': {}
 
-  '@pptb/types@1.2.5':
+  '@pptb/types@1.2.7':
     dependencies:
-      '@pptb/validate': 0.0.2
+      '@pptb/validate': 1.0.5
 
-  '@pptb/validate@0.0.2':
+  '@pptb/validate@1.0.5':
     dependencies:
       tar: 7.5.22
 

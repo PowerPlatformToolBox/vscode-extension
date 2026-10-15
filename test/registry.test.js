@@ -107,6 +107,7 @@ test("catalog list and detail expose release and typed metadata without inventin
     assert.equal(tools[0].isVerified, true);
     assert.equal(tools[0].multiConnection, "optional");
     assert.equal(tools[0].connectionRequirement, "required");
+    assert.deepEqual(tools[0].features, { multiConnection: "optional", connectionRequirement: "required", enabledForPowerPlatformAPI: true });
     assert.equal(tools[0].enabledForPowerPlatformAPI, true);
     assert.equal(tools[0].mcpEnabled, true);
     assert.equal(tools[0].maturityStatus, "verified");
@@ -136,6 +137,15 @@ test("absent MCP stays absent and maturity does not inherit an unrelated badge",
     assert.equal(tool.isVerified, false);
     respond = (call) => ({ data: call.single ? { ...current, mcp_enabled: false } : [{ ...current, mcp_enabled: false }], count: 1, error: null });
     assert.equal((await new ToolRegistryManager(output).getTools()).tools[0].mcpEnabled, false);
+});
+
+test("modern connection ranges are loaded from the registry catalog", async () => {
+    const modern = { ...current, connections: '{"min":0,"max":10}', multi_connection: null, connection_requirement: null };
+    respond = (call) => ({ data: call.single ? modern : [modern], count: 1, error: null });
+    const tool = (await new ToolRegistryManager(output).getTools()).tools[0];
+    assert.deepEqual(tool.connections, { min: 0, max: 10 });
+    assert.deepEqual(tool.features, { connections: { min: 0, max: 10 }, enabledForPowerPlatformAPI: true });
+    assert.equal(tool.multiConnection, undefined);
 });
 
 test("known invocation tags come from capability_tags, not MCP or release metadata", async () => {
