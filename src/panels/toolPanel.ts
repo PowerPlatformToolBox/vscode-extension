@@ -11,6 +11,7 @@ import { TerminalManager } from "../managers/terminalManager";
 import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { buildToolCsp, type CspExceptions } from "../utils/csp";
+import { connectionTargetLabel, normalizeConnectionTarget, resolveConnectionSlots, type ConnectionIds, type ConnectionTarget, type ToolConnectionFeatures } from "../utils/connectionSlots";
 import { logger } from "../utils/logger";
 
 type ApiMessage = {
@@ -26,6 +27,8 @@ type ApiMessage = {
 type ToolContext = {
     toolId: string | null;
     instanceId?: string | null;
+    connectionIds?: ConnectionIds;
+    connectionUrls?: Array<string | null>;
     connectionUrl: string | null;
     connectionId?: string | null;
     secondaryConnectionUrl?: string | null;
@@ -72,12 +75,13 @@ export class ToolPanel {
     private readonly context: vscode.ExtensionContext;
     private readonly toolManager: ToolManager;
     private readonly toolRegistryManager: ToolRegistryManager;
-    private readonly multiConnectionMode: "required" | "optional" | "none";
+    private readonly connectionSlots: { min: number; max: number };
+    private readonly requirePowerPlatformApi: boolean;
     private readonly connectionsManager?: ConnectionsManager;
     private readonly dataverseManager?: DataverseManager;
     private readonly powerPlatformManager?: PowerPlatformManager;
-    private readonly secondaryConnectionStatusBar?: vscode.StatusBarItem;
-    private readonly impersonatedUsers: Partial<Record<"primary" | "secondary", DataverseUser>> = {};
+    private readonly connectionStatusBar?: vscode.StatusBarItem;
+    private readonly impersonatedUsers: Partial<Record<number, DataverseUser>> = {};
 
     private toolContext: ToolContext;
 
@@ -93,16 +97,18 @@ export class ToolPanel {
         toolManager: ToolManager,
         toolRegistryManager: ToolRegistryManager,
         managers?: OpenManagers,
-        multiConnectionMode: "required" | "optional" | "none" = "none",
-        initialContext?: Partial<Pick<ToolContext, "connectionId" | "connectionUrl" | "secondaryConnectionId" | "secondaryConnectionUrl">>,
-        initialImpersonatedUsers?: Partial<Record<"primary" | "secondary", DataverseUser>>,
+        connectionSlots: { min: number; max: number } = { min: 1, max: 1 },
+        requirePowerPlatformApi = false,
+        initialContext?: Partial<ToolContext>,
+        initialImpersonatedUsers?: Partial<Record<number, DataverseUser>>,
     ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.context = context;
         this.toolManager = toolManager;
         this.toolRegistryManager = toolRegistryManager;
-        this.multiConnectionMode = multiConnectionMode;
+        this.connectionSlots = connectionSlots;
+        this.requirePowerPlatformApi = requirePowerPlatformApi;
         this.connectionsManager = managers?.connectionsManager;
         this.dataverseManager = managers?.dataverseManager;
         this.powerPlatformManager = managers?.powerPlatformManager;
@@ -110,23 +116,22 @@ export class ToolPanel {
 
         this.toolContext = {
             toolId,
+            connectionIds: Array.from({ length: connectionSlots.max }, (_, index) => initialContext?.connectionIds?.[index] ?? (index === 0 ? initialContext?.connectionId : index === 1 ? initialContext?.secondaryConnectionId : null) ?? null),
+            connectionUrls: Array.from({ length: connectionSlots.max }, (_, index) => initialContext?.connectionUrls?.[index] ?? (index === 0 ? initialContext?.connectionUrl : index === 1 ? initialContext?.secondaryConnectionUrl : null) ?? null),
             connectionUrl: initialContext?.connectionUrl ?? null,
             connectionId: initialContext?.connectionId ?? null,
             secondaryConnectionUrl: initialContext?.secondaryConnectionUrl ?? null,
             secondaryConnectionId: initialContext?.secondaryConnectionId ?? null,
         };
 
-        if (this.connectionsManager && this.multiConnectionMode !== "none") {
-            this.secondaryConnectionStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10);
-            this.secondaryConnectionStatusBar.command = {
-                command: `pptb.toolPanel.selectSecondaryConnection.${toolId}`,
-                title: "Select secondary connection",
-            };
+        if (this.connectionsManager && this.connectionSlots.max > 0) {
+            this.connectionStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 10);
+            this.connectionStatusBar.command = `pptb.toolPanel.manageConnections.${toolId}`;
             this.disposables.push(
-                vscode.commands.registerCommand(`pptb.toolPanel.selectSecondaryConnection.${toolId}`, () => this.showSecondaryConnectionPicker()),
-                this.panel.onDidChangeViewState(() => this.updateSecondaryConnectionStatusBar()),
+                vscode.commands.registerCommand(`pptb.toolPanel.manageConnections.${toolId}`, () => this.showConnectionSlotPicker()),
+                this.panel.onDidChangeViewState(() => this.updateConnectionStatusBar()),
             );
-            this.updateSecondaryConnectionStatusBar();
+            this.updateConnectionStatusBar();
         }
 
         const toolForHtml = this.toolManager.getById(toolId);
@@ -148,7 +153,7 @@ export class ToolPanel {
         if (this.connectionsManager) {
             this.disposables.push(
                 this.connectionsManager.onConnectionsChanged.event(() => {
-                    this.updateSecondaryConnectionStatusBar();
+                    this.updateConnectionStatusBar();
                     this.pushEvent("connection:updated", {});
                 }),
             );
@@ -172,8 +177,7 @@ export class ToolPanel {
     /**
      * Open (or reveal) a tool panel for the given toolId.
      * Each tool gets its own panel; launching the same tool again reveals it.
-     * Validates the active connection and prompts for a secondary connection when
-     * the normalized registry metadata declares `multi_connection`.
+     * Resolves the declared connection range and prompts for required and optional slots.
      */
     static open(
         extensionUri: vscode.Uri,
@@ -219,45 +223,40 @@ export class ToolPanel {
             }
         }
 
-        let multiConnectionMode: "required" | "optional" | "none" = tool?.multiConnection ?? "none";
+        let connectionSlots = resolveConnectionSlots(tool?.features ?? (tool ? { multiConnection: tool.multiConnection, connectionRequirement: tool.connectionRequirement } : undefined));
+        let requirePowerPlatformApi = tool?.features?.enabledForPowerPlatformAPI === true || tool?.enabledForPowerPlatformAPI === true;
+        if (tool) {
+            const registryTool = await toolRegistryManager.getToolById(toolId);
+            const registryFeatures: ToolConnectionFeatures | undefined = registryTool?.features ?? (registryTool?.connections !== undefined
+                ? { connections: registryTool.connections }
+                : registryTool?.multiConnection || registryTool?.connectionRequirement
+                  ? { multiConnection: registryTool.multiConnection, connectionRequirement: registryTool.connectionRequirement }
+                  : undefined);
+            const localFeatures: ToolConnectionFeatures | undefined = tool.features?.connections !== undefined
+                ? { connections: tool.features.connections }
+                : tool.features?.multiConnection || tool.features?.connectionRequirement
+                  ? { multiConnection: tool.features.multiConnection, connectionRequirement: tool.features.connectionRequirement }
+                  : { multiConnection: tool.multiConnection, connectionRequirement: tool.connectionRequirement };
+            connectionSlots = resolveConnectionSlots(registryFeatures ?? localFeatures);
+            requirePowerPlatformApi ||= registryTool?.features?.enabledForPowerPlatformAPI === true || registryTool?.enabledForPowerPlatformAPI === true;
+        }
 
-        // Validate primary connection before launching
         if (managers?.connectionsManager) {
             const activeConnection = managers.connectionsManager.getActiveConnection();
-            if (!activeConnection) {
-                const action = await vscode.window.showErrorMessage("No active connection. Please connect to an environment before launching a tool.", "Add Connection");
-                if (action === "Add Connection") {
-                    await vscode.commands.executeCommand("pptb.connections.add");
-                }
-                return;
+            const connectionIds = connectionSlots.max > 0 ? await ToolPanel.promptConnectionSlots(managers.connectionsManager, connectionSlots, activeConnection?.id, requirePowerPlatformApi) : [];
+            if (!connectionIds || connectionIds.slice(0, connectionSlots.min).some((id) => !id)) return;
+
+            const selectedConnections = await Promise.all(connectionIds.map((id) => (id ? managers.connectionsManager!.getById(id) : undefined)));
+        const impersonatedUsers: Partial<Record<number, DataverseUser>> = {};
+        if (launchMode === "impersonated") {
+            for (let index = 0; index < selectedConnections.length; index++) {
+                const connection = selectedConnections[index];
+                if (!connection) continue;
+                const withSecrets = await managers.connectionsManager.getWithSecrets(connection.id);
+                const user = withSecrets ? await ToolPanel.promptImpersonationUser(managers.dataverseManager, withSecrets, index) : undefined;
+                if (user) impersonatedUsers[index] = user;
             }
-
-            // Use the normalized release metadata; the installed manifest is the local fallback.
-            let secondaryConnectionId: string | null = null;
-            let secondaryConnectionUrl: string | null = null;
-
-            if (tool) {
-                const registryTool = await toolRegistryManager.getToolById(toolId);
-                multiConnectionMode = registryTool?.multiConnection ?? tool.multiConnection ?? "none";
-                const multiConnection = multiConnectionMode;
-
-                if (multiConnection === "required" || multiConnection === "optional") {
-                    const selected = await ToolPanel.promptSecondaryConnection(managers.connectionsManager, activeConnection.id, multiConnection);
-
-                    if (selected === undefined && multiConnection === "required") {
-                        // User cancelled — required secondary connection not provided
-                        return;
-                    }
-
-                    if (selected) {
-                        secondaryConnectionId = selected.id;
-                        secondaryConnectionUrl = selected.url;
-                    }
-                }
-            }
-
-            const impersonatedUsers =
-                launchMode === "impersonated" ? await ToolPanel.selectImpersonatedUsers(managers.connectionsManager, managers.dataverseManager, activeConnection.id, secondaryConnectionId) : {};
+        }
 
             const title = tool ? `PPTB Tool — ${tool.name}` : "PPTB Tool";
 
@@ -273,12 +272,14 @@ export class ToolPanel {
             });
 
             const initialContext: Partial<ToolContext> = {
-                connectionId: activeConnection.id,
-                connectionUrl: activeConnection.url,
-                secondaryConnectionId,
-                secondaryConnectionUrl,
+                connectionIds,
+                connectionUrls: selectedConnections.map((connection) => connection?.url ?? null),
+                connectionId: connectionIds[0] ?? null,
+                connectionUrl: selectedConnections[0]?.url ?? null,
+                secondaryConnectionId: connectionIds[1] ?? null,
+                secondaryConnectionUrl: selectedConnections[1]?.url ?? null,
             };
-            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode, initialContext, impersonatedUsers));
+            ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, connectionSlots, requirePowerPlatformApi, initialContext, impersonatedUsers));
             return;
         }
 
@@ -292,115 +293,91 @@ export class ToolPanel {
             retainContextWhenHidden: true,
         });
 
-        ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, multiConnectionMode));
-    }
-
-    private static async selectImpersonatedUsers(
-        connectionsManager: ConnectionsManager,
-        dataverseManager: DataverseManager | undefined,
-        primaryConnectionId: string,
-        secondaryConnectionId: string | null,
-    ): Promise<Partial<Record<"primary" | "secondary", DataverseUser>>> {
-        const users: Partial<Record<"primary" | "secondary", DataverseUser>> = {};
-        const primary = await connectionsManager.getWithSecrets(primaryConnectionId);
-        const primaryUser = primary ? await ToolPanel.promptImpersonationUser(dataverseManager, primary, "primary") : undefined;
-        if (primaryUser) {
-            users.primary = primaryUser;
-        }
-
-        if (secondaryConnectionId) {
-            const secondary = await connectionsManager.getWithSecrets(secondaryConnectionId);
-            const secondaryUser = secondary ? await ToolPanel.promptImpersonationUser(dataverseManager, secondary, "secondary") : undefined;
-            if (secondaryUser) {
-                users.secondary = secondaryUser;
-            }
-        }
-        return users;
+        ToolPanel.panels.set(toolId, new ToolPanel(panel, extensionUri, context, toolId, toolManager, toolRegistryManager, managers, connectionSlots, requirePowerPlatformApi));
     }
 
     private async configureImpersonation(enabled: boolean): Promise<void> {
-        delete this.impersonatedUsers.primary;
-        delete this.impersonatedUsers.secondary;
+        for (const index of Object.keys(this.impersonatedUsers)) delete this.impersonatedUsers[Number(index)];
         this.updateImpersonationBanner();
         if (!enabled || !this.connectionsManager) {
             return;
         }
 
-        const primary = await this.getConnection("primary");
-        const primaryUser = primary ? await ToolPanel.promptImpersonationUser(this.dataverseManager, primary, "primary") : undefined;
-        if (primaryUser) {
-            this.impersonatedUsers.primary = primaryUser;
-        }
-
-        const secondary = await this.getConnection("secondary");
-        const secondaryUser = secondary ? await ToolPanel.promptImpersonationUser(this.dataverseManager, secondary, "secondary") : undefined;
-        if (secondaryUser) {
-            this.impersonatedUsers.secondary = secondaryUser;
+        for (let index = 0; index < (this.toolContext.connectionIds?.length ?? 0); index++) {
+            const connection = await this.getConnection(index);
+            if (!connection) continue;
+            const user = await ToolPanel.promptImpersonationUser(this.dataverseManager, connection, index);
+            if (user) this.impersonatedUsers[index] = user;
         }
         this.updateImpersonationBanner();
     }
 
-    /**
-     * Show a quick-pick for the user to select a secondary connection.
-     * - Returns the selected connection's id/url on success.
-     * - Returns null when the user skips (optional mode).
-     * - Returns undefined when the user dismisses the picker or no candidates exist (required mode).
-     */
-    private static async promptSecondaryConnection(
-        connectionsManager: ConnectionsManager,
-        primaryConnectionId: string,
-        mode: "required" | "optional",
-        currentSecondaryConnectionId?: string | null,
-    ): Promise<{ id: string; url: string } | null | undefined> {
-        const candidates = connectionsManager.getAll().filter((c) => c.id !== primaryConnectionId);
+    private static async promptConnectionSlots(connectionsManager: ConnectionsManager, range: { min: number; max: number }, activeConnectionId?: string, requirePowerPlatformApi = false): Promise<ConnectionIds | undefined> {
+        const candidates = connectionsManager.getAll().filter((connection) => !connection.hasIncompleteCredentials && (!requirePowerPlatformApi || connection.enabledForPowerPlatformAPI));
+        const ids: ConnectionIds = Array.from({ length: range.max }, (_, index) => (range.min > 0 && index === 0 && candidates.some((connection) => connection.id === activeConnectionId) ? activeConnectionId! : null));
+        if (range.min > 0 && candidates.length === 0) {
+            const action = await vscode.window.showErrorMessage("This tool requires a connection, but no complete connections are configured.", "Add Connection");
+            if (action === "Add Connection") await vscode.commands.executeCommand("pptb.connections.add");
+            return undefined;
+        }
 
-        if (candidates.length === 0) {
-            if (mode === "required") {
-                await vscode.window.showErrorMessage("This tool requires a secondary connection but no other connections are configured. Please add another connection first.");
-                return undefined;
+        type PickItem = vscode.QuickPickItem & { connectionId?: string; skip?: boolean; done?: boolean };
+        const pickSlot = async (index: number, required: boolean): Promise<string | null | "done" | undefined> => {
+            const items: PickItem[] = candidates.map((connection) => ({
+                label: connection.name,
+                description: connection.url,
+                detail: [connection.id === ids[index] ? "Current selection" : undefined, connection.environment, connection.category].filter(Boolean).join(" · "),
+                connectionId: connection.id,
+            }));
+            if (!required) {
+                items.push({ label: "$(close) Skip this slot", description: "Leave this connection slot empty", skip: true });
+                items.push({ label: "$(check) Finish connection selection", description: "Continue with the selected slots", done: true });
             }
-            return null; // optional — no candidates, proceed without
+            const picked = await vscode.window.showQuickPick(items, {
+                title: `Select ${connectionTargetLabel(index)} connection${required ? " (required)" : " (optional)"} · Slot ${index + 1}/${range.max}`,
+                placeHolder: "Choose an environment connection",
+            });
+            if (!picked) return undefined;
+            if (picked.done) return "done";
+            if (picked.skip) return null;
+            return picked.connectionId;
+        };
+
+        const preselectedPrimary = ids[0];
+        if (preselectedPrimary) {
+            const action = await vscode.window.showQuickPick(["Keep active connection", "Choose a different connection"], {
+                title: `Select ${connectionTargetLabel(0)} connection · Slot 1/${range.max}`,
+            });
+            if (action === undefined) return undefined;
+            if (action === "Choose a different connection") {
+                const selected = await pickSlot(0, range.min > 0);
+                if (selected === undefined || selected === "done" || (range.min > 0 && selected === null)) return undefined;
+                ids[0] = selected;
+            }
         }
 
-        type PickItem = vscode.QuickPickItem & { connectionId?: string; connectionUrl?: string };
-
-        const items: PickItem[] = candidates.map((c) => ({
-            label: c.name,
-            description: c.url,
-            detail: [c.id === currentSecondaryConnectionId ? "Current selection" : undefined, c.environment, c.category].filter(Boolean).join(" · "),
-            picked: c.id === currentSecondaryConnectionId,
-            connectionId: c.id,
-            connectionUrl: c.url,
-        }));
-
-        if (mode === "optional") {
-            items.push({ label: "$(close) Clear secondary connection", description: "Continue without a secondary connection" });
+        for (let index = 0; index < range.min; index++) {
+            if (ids[index]) continue;
+            const selected = await pickSlot(index, true);
+            if (!selected || selected === "done") return undefined;
+            ids[index] = selected;
         }
-
-        const picked = await vscode.window.showQuickPick<PickItem>(items, {
-            title: mode === "required" ? "Select Secondary Connection (required)" : "Select Secondary Connection (optional)",
-            placeHolder: "Choose a secondary environment connection",
-        });
-
-        if (!picked) {
-            return undefined; // picker dismissed
+        for (let index = range.min; index < range.max; index++) {
+            const selected = await pickSlot(index, false);
+            if (selected === undefined || selected === "done") break;
+            ids[index] = selected;
         }
-
-        if (!picked.connectionId) {
-            return null; // "Skip" chosen
-        }
-
-        return { id: picked.connectionId, url: picked.connectionUrl! };
+        return ids;
     }
 
-    private static async promptImpersonationUser(dataverseManager: DataverseManager | undefined, connection: Connection, target: "primary" | "secondary"): Promise<DataverseUser | undefined> {
+    private static async promptImpersonationUser(dataverseManager: DataverseManager | undefined, connection: Connection, target: number): Promise<DataverseUser | undefined> {
         if (!dataverseManager) {
             return undefined;
         }
 
         type UserPickItem = vscode.QuickPickItem & { user?: DataverseUser; loadMore?: boolean };
         const quickPick = vscode.window.createQuickPick<UserPickItem>();
-        quickPick.title = `Impersonation (${target} connection) - ${connection.name}`;
+        quickPick.title = `Impersonation (Slot ${target + 1}) - ${connection.name}`;
         quickPick.placeholder = "Type a name or email to search Dataverse users";
         quickPick.matchOnDescription = true;
         quickPick.matchOnDetail = true;
@@ -488,7 +465,7 @@ export class ToolPanel {
 
     dispose(toolId: string): void {
         ToolPanel.panels.delete(toolId);
-        this.secondaryConnectionStatusBar?.dispose();
+        this.connectionStatusBar?.dispose();
         this.panel.dispose();
         this.terminalManager.dispose();
         for (const d of this.disposables) {
@@ -519,7 +496,7 @@ export class ToolPanel {
         }
     }
 
-    private loadToolHtml(tool: { toolPath: string; executableRelativePath?: string; name: string; cspExceptions?: CspExceptions }): string | null {
+    private loadToolHtml(tool: { toolPath: string; executableRelativePath?: string; name: string; cspExceptions?: CspExceptions; features?: ToolConnectionFeatures }): string | null {
         const candidates: string[] = [];
         if (tool.executableRelativePath) {
             candidates.push(path.join(tool.toolPath, tool.executableRelativePath));
@@ -557,10 +534,12 @@ export class ToolPanel {
                 const cspSource = this.panel.webview.cspSource;
                 const csp = buildToolCsp(cspSource, tool.cspExceptions);
 
+                const features = JSON.stringify(tool.features ?? {}).replace(/</g, "\\u003c");
                 const injection =
                     `<meta http-equiv="Content-Security-Policy" content="${csp}">\n` +
                     `<base href="${baseUri}/">\n` +
                     `<style>${this.getImpersonationBannerStyles()}</style>\n` +
+                    `<script>window.TOOLBOX_FEATURES = ${features};</script>\n` +
                     `<script>\n${polyfillContent}\n${this.getImpersonationBannerScript()}\n</script>`;
 
                 if (/<head[^>]*>/i.test(html)) {
@@ -619,10 +598,7 @@ export class ToolPanel {
     }
 
     private getImpersonationBannerScript(): string {
-        const initialUsers = JSON.stringify({
-            primary: this.impersonatedUsers.primary?.fullname ?? null,
-            secondary: this.impersonatedUsers.secondary?.fullname ?? null,
-        }).replace(/</g, "\\u003c");
+        const initialUsers = JSON.stringify(Object.fromEntries(Object.entries(this.impersonatedUsers).map(([index, user]) => [index, user?.fullname ?? null]))).replace(/</g, "\\u003c");
 
         return `
             (() => {
@@ -631,9 +607,9 @@ export class ToolPanel {
                 const updateBanner = (users) => {
                     currentUsers = users || {};
                     const banner = document.getElementById(bannerId);
-                    const primaryName = typeof currentUsers.primary === "string" ? currentUsers.primary : "";
-                    const secondaryName = typeof currentUsers.secondary === "string" ? currentUsers.secondary : "";
-                    const labels = [primaryName && "Primary: " + primaryName, secondaryName && "Secondary: " + secondaryName].filter(Boolean);
+                    const labels = Object.entries(currentUsers)
+                        .filter((entry) => typeof entry[1] === "string" && entry[1])
+                        .map(([index, name]) => "Slot " + (Number(index) + 1) + ": " + name);
                     if (!banner) return;
                     banner.textContent = labels.length ? "Dataverse impersonation active - " + labels.join(", ") : "";
                     banner.hidden = labels.length === 0;
@@ -668,10 +644,7 @@ export class ToolPanel {
         void this.panel.webview.postMessage({
             source: "pptb-host",
             type: "pptb:impersonation",
-            users: {
-                primary: this.impersonatedUsers.primary?.fullname ?? null,
-                secondary: this.impersonatedUsers.secondary?.fullname ?? null,
-            },
+            users: Object.fromEntries(Object.entries(this.impersonatedUsers).map(([index, user]) => [index, user?.fullname ?? null])),
         });
     }
 
@@ -706,7 +679,7 @@ export class ToolPanel {
             case "toolbox":
                 return this.dispatchToolbox(method);
             case "connections":
-                return this.dispatchConnections(method);
+                return this.dispatchConnections(method, args);
             case "utils":
                 return this.dispatchUtils(method, args);
             case "fileSystem":
@@ -735,14 +708,24 @@ export class ToolPanel {
         return this.getToolContext();
     }
 
-    private async dispatchConnections(method: string): Promise<unknown> {
+    private async dispatchConnections(method: string, args: unknown[] = []): Promise<unknown> {
+        if (method === "getConnections") {
+            return Promise.all(Array.from({ length: this.connectionSlots.max }, async (_id, index) => this.toToolSafeConnection(await this.getConnection(index))));
+        }
+
+        if (method === "getConnection") {
+            const target = normalizeConnectionTarget((args[0] ?? "primary") as ConnectionTarget);
+            if (target >= this.connectionSlots.max) throw new Error(`Connection slot ${target + 1} is outside this tool's declared connection range.`);
+            return this.toToolSafeConnection(await this.getConnection(target));
+        }
+
         if (method === "getActiveConnection") {
-            const connection = await this.getConnection("primary");
+            const connection = await this.getConnection(0);
             return this.toToolSafeConnection(connection);
         }
 
         if (method === "getSecondaryConnection") {
-            const connection = await this.getConnection("secondary");
+            const connection = await this.getConnection(1);
             return this.toToolSafeConnection(connection);
         }
 
@@ -789,6 +772,11 @@ export class ToolPanel {
                 const parsed = vscode.Uri.parse(urlText);
                 if (!["http", "https"].includes(parsed.scheme)) {
                     throw new Error("Only http/https URLs are supported.");
+                }
+                if (method === "openInConnectionBrowser") {
+                    const target = normalizeConnectionTarget((args[1] ?? "primary") as ConnectionTarget);
+                    if (target >= this.connectionSlots.max) throw new Error(`Connection slot ${target + 1} is outside this tool's declared connection range.`);
+                    if (!(await this.getConnection(target))) throw new Error(`No connection available for ${connectionTargetLabel(target)}.`);
                 }
                 await vscode.env.openExternal(parsed);
                 return;
@@ -1037,13 +1025,14 @@ export class ToolPanel {
         }
 
         const hasConnectionTargetArg = this.hasConnectionTargetArg(args);
-        const connectionTarget = hasConnectionTargetArg ? (args[args.length - 1] as "primary" | "secondary") : "primary";
+        const connectionTarget = normalizeConnectionTarget(hasConnectionTargetArg ? (args[args.length - 1] as ConnectionTarget) : "primary");
+        if (connectionTarget >= this.connectionSlots.max) throw new Error(`Connection slot ${connectionTarget + 1} is outside this tool's declared connection range.`);
         const trimmedArgs = hasConnectionTargetArg ? args.slice(0, -1) : args;
         const callerObjectId = this.impersonatedUsers[connectionTarget]?.azureactivedirectoryobjectid;
 
         const connection = await this.getConnection(connectionTarget);
         if (!connection) {
-            throw new Error(`No ${connectionTarget} connection available.`);
+            throw new Error(`No connection available for ${connectionTargetLabel(connectionTarget)}.`);
         }
 
         return this.dataverseManager.withImpersonation(callerObjectId, () => Promise.resolve((fn as (...params: unknown[]) => unknown).apply(this.dataverseManager, [connection, ...trimmedArgs])));
@@ -1055,7 +1044,7 @@ export class ToolPanel {
         }
 
         const lastArg = args[args.length - 1];
-        return lastArg === "primary" || lastArg === "secondary";
+        return lastArg === "primary" || lastArg === "secondary" || (typeof lastArg === "number" && Number.isInteger(lastArg) && lastArg >= 0);
     }
 
     private async dispatchPowerPlatform(method: string, args: unknown[]): Promise<unknown> {
@@ -1076,39 +1065,47 @@ export class ToolPanel {
             throw new Error("Invalid Power Platform HTTP method.");
         }
 
-        const target = connectionTarget === "secondary" ? "secondary" : "primary";
+        const target = normalizeConnectionTarget((connectionTarget ?? "primary") as ConnectionTarget);
+        if (target >= this.connectionSlots.max) throw new Error(`Connection slot ${target + 1} is outside this tool's declared connection range.`);
+        const connection = await this.getConnection(target);
+        if (!connection) throw new Error(`No connection available for ${connectionTargetLabel(target)}.`);
 
-        return this.powerPlatformManager.request(namespace, httpMethod, typeof pathArg === "string" ? pathArg : "", body, target, (headers as Record<string, string>) ?? {});
+        return this.powerPlatformManager.requestWithConnection(connection, namespace, httpMethod, typeof pathArg === "string" ? pathArg : "", body, (headers as Record<string, string>) ?? {});
     }
 
     private async getToolContext(): Promise<ToolContext> {
-        const primary = await this.getConnection("primary");
-        const secondary = await this.getConnection("secondary");
+        const connections = await Promise.all((this.toolContext.connectionIds ?? []).map((_id, index) => this.getConnection(index)));
+        const connectionIds = this.toolContext.connectionIds ?? [];
+        while (connections.length < this.connectionSlots.max) connections.push(undefined);
 
         const nextContext: ToolContext = {
             ...this.toolContext,
-            connectionId: primary?.id ?? this.toolContext.connectionId ?? null,
-            connectionUrl: primary?.url ?? this.toolContext.connectionUrl ?? null,
-            secondaryConnectionId: secondary?.id ?? this.toolContext.secondaryConnectionId ?? null,
-            secondaryConnectionUrl: secondary?.url ?? this.toolContext.secondaryConnectionUrl ?? null,
+            connectionIds: connections.map((connection, index) => connection?.id ?? connectionIds[index] ?? null),
+            connectionUrls: connections.map((connection, index) => connection?.url ?? this.toolContext.connectionUrls?.[index] ?? null),
+            connectionId: connections[0]?.id ?? null,
+            connectionUrl: connections[0]?.url ?? null,
+            secondaryConnectionId: connections[1]?.id ?? null,
+            secondaryConnectionUrl: connections[1]?.url ?? null,
         };
 
         this.toolContext = nextContext;
         return nextContext;
     }
 
-    private async getConnection(target: "primary" | "secondary"): Promise<Connection | undefined> {
+    private async getConnection(target: ConnectionTarget): Promise<Connection | undefined> {
         if (!this.connectionsManager) {
             return undefined;
         }
 
-        const id = target === "primary" ? this.toolContext.connectionId : this.toolContext.secondaryConnectionId;
+        const index = normalizeConnectionTarget(target);
+        const ids = this.toolContext.connectionIds;
+        const id = ids ? (ids[index] ?? null) : index === 0 ? this.toolContext.connectionId : index === 1 ? this.toolContext.secondaryConnectionId : null;
 
         if (typeof id === "string" && id.length > 0) {
             return this.connectionsManager.getWithSecrets(id);
         }
 
-        if (target === "primary") {
+        if (index === 0 && !ids) {
             const active = this.connectionsManager.getActiveConnection();
             if (active) {
                 return this.connectionsManager.getWithSecrets(active.id);
@@ -1144,16 +1141,36 @@ export class ToolPanel {
     }
 
     private setToolContext(next: Partial<ToolContext> | undefined): void {
-        if (next?.connectionId !== undefined && next.connectionId !== this.toolContext.connectionId) {
-            delete this.impersonatedUsers.primary;
+        if (!next?.connectionIds) {
+            if (next?.connectionId !== undefined && next.connectionId !== this.toolContext.connectionId) delete this.impersonatedUsers[0];
+            if (next?.secondaryConnectionId !== undefined && next.secondaryConnectionId !== this.toolContext.secondaryConnectionId) delete this.impersonatedUsers[1];
         }
-        if (next?.secondaryConnectionId !== undefined && next.secondaryConnectionId !== this.toolContext.secondaryConnectionId) {
-            delete this.impersonatedUsers.secondary;
+
+        const connectionIds: ConnectionIds = next?.connectionIds
+            ? Array.from({ length: this.connectionSlots.max }, (_, index) => next.connectionIds![index] ?? null)
+            : Array.from({ length: this.connectionSlots.max }, (_, index) => this.toolContext.connectionIds?.[index] ?? (index === 0 ? this.toolContext.connectionId : index === 1 ? this.toolContext.secondaryConnectionId : null) ?? null);
+        if (next?.connectionIds) {
+            for (let index = 0; index < connectionIds.length; index++) {
+                if (connectionIds[index] !== (this.toolContext.connectionIds?.[index] ?? null)) delete this.impersonatedUsers[index];
+            }
         }
+        const connectionUrls: Array<string | null> = next?.connectionUrls
+            ? Array.from({ length: this.connectionSlots.max }, (_, index) => next.connectionUrls![index] ?? null)
+            : Array.from({ length: this.connectionSlots.max }, (_, index) => {
+                  const connectionChanged = next?.connectionIds && next.connectionIds[index] !== this.toolContext.connectionIds?.[index];
+                  if (connectionChanged) return null;
+                  return this.toolContext.connectionUrls?.[index] ?? (index === 0 ? this.toolContext.connectionUrl : index === 1 ? this.toolContext.secondaryConnectionUrl : null) ?? null;
+              });
+        if (next?.connectionId !== undefined && !next.connectionIds) connectionIds[0] = next.connectionId;
+        if (next?.secondaryConnectionId !== undefined && !next.connectionIds) connectionIds[1] = next.secondaryConnectionId;
+        if (next?.connectionUrl !== undefined && !next.connectionUrls) connectionUrls[0] = next.connectionUrl;
+        if (next?.secondaryConnectionUrl !== undefined && !next.connectionUrls) connectionUrls[1] = next.secondaryConnectionUrl;
 
         this.toolContext = {
             ...this.toolContext,
             ...(next ?? {}),
+            connectionIds: connectionIds.slice(0, this.connectionSlots.max),
+            connectionUrls: connectionUrls.slice(0, this.connectionSlots.max),
             toolId: typeof next?.toolId === "string" || next?.toolId === null ? next.toolId : this.toolContext.toolId,
             connectionUrl: typeof next?.connectionUrl === "string" || next?.connectionUrl === null ? next.connectionUrl : this.toolContext.connectionUrl,
             connectionId: typeof next?.connectionId === "string" || next?.connectionId === null ? next.connectionId : this.toolContext.connectionId,
@@ -1161,7 +1178,12 @@ export class ToolPanel {
             secondaryConnectionId: typeof next?.secondaryConnectionId === "string" || next?.secondaryConnectionId === null ? next.secondaryConnectionId : this.toolContext.secondaryConnectionId,
         };
 
-        this.updateSecondaryConnectionStatusBar();
+        this.toolContext.connectionId = this.toolContext.connectionIds?.[0] ?? null;
+        this.toolContext.connectionUrl = this.toolContext.connectionUrls?.[0] ?? null;
+        this.toolContext.secondaryConnectionId = this.toolContext.connectionIds?.[1] ?? null;
+        this.toolContext.secondaryConnectionUrl = this.toolContext.connectionUrls?.[1] ?? null;
+
+        this.updateConnectionStatusBar();
         this.updateImpersonationBanner();
 
         void this.panel.webview.postMessage({
@@ -1171,8 +1193,8 @@ export class ToolPanel {
         });
     }
 
-    private updateSecondaryConnectionStatusBar(): void {
-        const statusBar = this.secondaryConnectionStatusBar;
+    private updateConnectionStatusBar(): void {
+        const statusBar = this.connectionStatusBar;
         if (!statusBar) return;
 
         if (!this.panel.active || !this.connectionsManager) {
@@ -1180,30 +1202,88 @@ export class ToolPanel {
             return;
         }
 
-        const secondary = this.toolContext.secondaryConnectionId ? this.connectionsManager.getById(this.toolContext.secondaryConnectionId) : undefined;
-        statusBar.text = `$(database) Secondary: ${secondary?.name ?? "Select connection"}`;
-        statusBar.tooltip = secondary
-            ? `Secondary connection: ${secondary.name} (${secondary.url})\nClick to change this tool's secondary connection`
-            : "Click to select this tool's secondary connection";
+        const assigned = Array.from({ length: this.connectionSlots.max }, (_, index) => {
+            const id = this.toolContext.connectionIds?.[index] ?? null;
+            const connection = id ? this.connectionsManager!.getById(id) : undefined;
+            const impersonated = this.impersonatedUsers[index]?.fullname;
+            return `${connectionTargetLabel(index)}: ${connection?.name ?? "Not set"}${impersonated ? ` (impersonating ${impersonated})` : ""}`;
+        });
+        const selected = (this.toolContext.connectionIds ?? []).filter(Boolean).length;
+        statusBar.text = `$(database) Connections: ${selected}/${this.connectionSlots.max}`;
+        statusBar.tooltip = `${assigned.join("\n")}\nClick to manage this tool's connection slots`;
         statusBar.show();
     }
 
-    private async showSecondaryConnectionPicker(): Promise<void> {
-        if (!this.connectionsManager || this.multiConnectionMode === "none") return;
+    private async showConnectionSlotPicker(): Promise<void> {
+        if (!this.connectionsManager || this.connectionSlots.max === 0) return;
 
-        const primary = await this.getConnection("primary");
-        if (!primary) {
-            void vscode.window.showWarningMessage("No primary connection is available for this tool.");
+        const items: Array<vscode.QuickPickItem & { slotIndex: number }> = Array.from({ length: this.connectionSlots.max }, (_, index) => {
+            const id = this.toolContext.connectionIds?.[index];
+            const connection = id ? this.connectionsManager!.getById(id) : undefined;
+            return {
+                label: `${connectionTargetLabel(index)}: ${connection?.name ?? "Not set"}`,
+                description: `Slot ${index + 1}${index < this.connectionSlots.min ? " · required" : " · optional"}`,
+                detail: connection?.url ?? "Choose a connection",
+                slotIndex: index,
+            };
+        });
+        const impersonationItems = (this.toolContext.connectionIds ?? []).flatMap((id, index) => id ? [{
+            label: `$(person) ${connectionTargetLabel(index)} impersonation: ${this.impersonatedUsers[index]?.fullname ?? "Off"}`,
+            description: `Manage Dataverse impersonation for ${connectionTargetLabel(index)}`,
+            slotIndex: index,
+            impersonation: true as const,
+        }] : []);
+        const addSlotItem = this.connectionSlots.max > 0 && this.connectionSlots.min === 0 && !this.toolContext.connectionIds?.some(Boolean)
+            ? [{ label: "$(add) Assign a connection", description: "Choose a connection for this optional tool", slotIndex: 0, addSlot: true as const }]
+            : [];
+        const picked = await vscode.window.showQuickPick([...items, ...impersonationItems, ...addSlotItem], { title: "Manage Tool Connections", placeHolder: "Select a slot to change, clear, or manage impersonation" });
+        if (!picked) return;
+        const index = picked.slotIndex;
+        if ("addSlot" in picked) {
+            const candidates = this.connectionsManager.getAll().filter((connection) => !connection.hasIncompleteCredentials && (!this.requirePowerPlatformApi || connection.enabledForPowerPlatformAPI));
+            const selected = await vscode.window.showQuickPick(candidates.map((connection) => ({ label: connection.name, description: connection.url, connectionId: connection.id })), {
+                title: `Select ${connectionTargetLabel(index)} connection`,
+                placeHolder: "Choose an environment connection",
+            });
+            if (!selected) return;
+            const connectionIds: ConnectionIds = Array.from({ length: this.connectionSlots.max }, (_, slotIndex) => this.toolContext.connectionIds?.[slotIndex] ?? null);
+            connectionIds[index] = selected.connectionId;
+            const connectionUrls = await Promise.all(connectionIds.map(async (id) => (id ? this.connectionsManager!.getById(id)?.url ?? null : null)));
+            this.setToolContext({ connectionIds, connectionUrls });
+            this.pushEvent("connection:updated", {});
             return;
         }
-
-        const selected = await ToolPanel.promptSecondaryConnection(this.connectionsManager, primary.id, this.multiConnectionMode, this.toolContext.secondaryConnectionId);
-        if (selected === undefined) return;
-
-        this.setToolContext({
-            secondaryConnectionId: selected?.id ?? null,
-            secondaryConnectionUrl: selected?.url ?? null,
+        if ("impersonation" in picked) {
+            const connection = await this.getConnection(index);
+            if (!connection || !this.dataverseManager) return;
+            const action = await vscode.window.showQuickPick(["Set or change impersonated user", "Clear impersonation"], { title: `${connectionTargetLabel(index)} Dataverse impersonation` });
+            if (action === "Clear impersonation") delete this.impersonatedUsers[index];
+            else if (action === "Set or change impersonated user") {
+                const user = await ToolPanel.promptImpersonationUser(this.dataverseManager, connection, index);
+                if (user) this.impersonatedUsers[index] = user;
+            } else return;
+            this.updateImpersonationBanner();
+            return;
+        }
+        const currentId = this.toolContext.connectionIds?.[index] ?? null;
+        const candidates = this.connectionsManager.getAll().filter((connection) => !connection.hasIncompleteCredentials && (!this.requirePowerPlatformApi || connection.enabledForPowerPlatformAPI));
+        const slotItems: Array<vscode.QuickPickItem & { connectionId?: string | null }> = candidates.map((connection) => ({
+            label: connection.name,
+            description: connection.url,
+            detail: [connection.id === currentId ? "Current selection" : undefined, connection.environment, connection.category].filter(Boolean).join(" · "),
+            connectionId: connection.id,
+        }));
+        if (index >= this.connectionSlots.min) slotItems.push({ label: "$(close) Clear this slot", description: "Leave this optional slot empty", connectionId: null });
+        const selected = await vscode.window.showQuickPick(slotItems, {
+            title: `Select ${connectionTargetLabel(index)} connection`,
+            placeHolder: "Choose an environment connection",
         });
+        if (!selected || selected.connectionId === undefined) return;
+
+        const connectionIds: ConnectionIds = Array.from({ length: this.connectionSlots.max }, (_, slotIndex) => this.toolContext.connectionIds?.[slotIndex] ?? null);
+        connectionIds[index] = selected.connectionId;
+        const connectionUrls = await Promise.all(connectionIds.map(async (id) => (id ? this.connectionsManager!.getById(id)?.url ?? null : null)));
+        this.setToolContext({ connectionIds, connectionUrls });
         this.pushEvent("connection:updated", {});
     }
 

@@ -16,6 +16,7 @@ interface Model {
     categories?: string[];
     multiConnection?: "required" | "optional" | "none";
     connectionRequirement?: "required" | "optional";
+    features?: { connections?: number | { min?: number; max?: number }; multiConnection?: "required" | "optional" | "none"; connectionRequirement?: "required" | "optional"; enabledForPowerPlatformAPI?: boolean };
     enabledForPowerPlatformAPI?: boolean;
     mcpEnabled?: boolean;
     maturityStatus?: string;
