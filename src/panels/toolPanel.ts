@@ -12,6 +12,7 @@ import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { buildToolCsp, type CspExceptions } from "../utils/csp";
 import { connectionTargetLabel, normalizeConnectionTarget, resolveConnectionSlots, type ConnectionIds, type ConnectionTarget, type ToolConnectionFeatures } from "../utils/connectionSlots";
+import { createImpersonationPickerItems, formatConnectionStatus, resolveImpersonationPickerSelection, type ImpersonationPickerItem } from "../utils/impersonation";
 import { logger } from "../utils/logger";
 
 type ApiMessage = {
@@ -377,7 +378,7 @@ export class ToolPanel {
             return undefined;
         }
 
-        type UserPickItem = vscode.QuickPickItem & { user?: DataverseUser; loadMore?: boolean; skip?: boolean };
+        type UserPickItem = vscode.QuickPickItem & ImpersonationPickerItem<DataverseUser>;
         const quickPick = vscode.window.createQuickPick<UserPickItem>();
         quickPick.title = `Impersonation (Slot ${target + 1}) - ${connection.name}`;
         quickPick.placeholder = "Type a name or email to search Dataverse users";
@@ -401,21 +402,7 @@ export class ToolPanel {
             };
 
             const updateItems = (): void => {
-                const items: UserPickItem[] = [{
-                    label: "$(close) Skip Impersonation for this connection",
-                    description: "Use this connection without Dataverse impersonation",
-                    skip: true,
-                    alwaysShow: true,
-                }, ...users.map((user) => ({
-                    label: user.fullname,
-                    description: user.internalemailaddress ?? user.domainname ?? user.azureactivedirectoryobjectid,
-                    detail: user.systemuserid,
-                    user,
-                }))];
-                if (nextLink) {
-                    items.push({ label: "$(more) Load more users", description: "Fetch the next page of matching users", loadMore: true, alwaysShow: true });
-                }
-                quickPick.items = items;
+                quickPick.items = createImpersonationPickerItems(users, Boolean(nextLink));
             };
 
             const loadUsers = async (search: string, append: boolean, cursor?: string): Promise<void> => {
@@ -441,10 +428,7 @@ export class ToolPanel {
                 } catch (error: unknown) {
                     if (resolved || activeRequestId !== requestId) return;
                     const message = error instanceof Error ? error.message : String(error);
-                    quickPick.items = [
-                        { label: "$(close) Skip Impersonation for this connection", description: "Use this connection without Dataverse impersonation", skip: true, alwaysShow: true },
-                        { label: "Could not load users", description: message },
-                    ];
+                    quickPick.items = createImpersonationPickerItems(users, false, message);
                     quickPick.placeholder = "Change the search text to try again";
                 } finally {
                     if (activeRequestId === requestId) quickPick.busy = false;
@@ -457,16 +441,12 @@ export class ToolPanel {
             });
 
             quickPick.onDidAccept((): void => {
-                const selected = quickPick.selectedItems[0];
-                if (selected?.user) {
-                    finish(selected.user);
-                    return;
-                }
-                if (selected?.skip) {
+                const selection = resolveImpersonationPickerSelection(quickPick.selectedItems[0], Boolean(nextLink));
+                if (selection.type === "user") {
+                    finish(selection.user);
+                } else if (selection.type === "skip") {
                     finish(null);
-                    return;
-                }
-                if (selected?.loadMore && nextLink) {
+                } else if (selection.type === "loadMore" && nextLink) {
                     void loadUsers(currentSearch, true, nextLink);
                 }
             });
@@ -1216,16 +1196,19 @@ export class ToolPanel {
             return;
         }
 
-        const assigned = Array.from({ length: this.connectionSlots.max }, (_, index) => {
+        const slots = Array.from({ length: this.connectionSlots.max }, (_, index) => {
             const id = this.toolContext.connectionIds?.[index] ?? null;
             const connection = id ? this.connectionsManager!.getById(id) : undefined;
-            const impersonated = this.impersonatedUsers[index]?.fullname;
-            return `${connectionTargetLabel(index)}: ${connection?.name ?? "Not set"} · ${impersonated ? `impersonating ${impersonated}` : "no impersonation"}`;
+            return {
+                index,
+                connectionId: id,
+                connectionName: connection?.name,
+                impersonatedUserName: this.impersonatedUsers[index]?.fullname,
+            };
         });
-        const selected = (this.toolContext.connectionIds ?? []).filter(Boolean).length;
-        const impersonatedCount = (this.toolContext.connectionIds ?? []).filter((id, index) => id && this.impersonatedUsers[index]).length;
-        statusBar.text = `$(database) Connections: ${selected}/${this.connectionSlots.max} · Impersonation: ${impersonatedCount}/${selected}`;
-        statusBar.tooltip = `${assigned.join("\n")}\nClick to manage this tool's connection slots`;
+        const summary = formatConnectionStatus(slots, this.connectionSlots.max);
+        statusBar.text = summary.text;
+        statusBar.tooltip = summary.tooltip;
         statusBar.show();
     }
 
