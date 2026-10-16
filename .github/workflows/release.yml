@@ -59,10 +59,13 @@ jobs:
                   commit-message: Version Packages
 
     publish:
-        name: Build and Publish VS Code Extension
+        name: Approve and Publish VS Code Extension
         needs: select-release-mode
         if: needs.select-release-mode.outputs.mode == 'publish'
         runs-on: ubuntu-latest
+        environment:
+            name: vscode-marketplace
+            url: https://marketplace.visualstudio.com/items?itemName=PowerPlatformToolBox.power-platform-toolbox
         permissions:
             contents: write
         steps:
