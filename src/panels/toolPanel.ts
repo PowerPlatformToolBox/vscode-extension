@@ -12,6 +12,7 @@ import { ToolManager } from "../managers/toolManager";
 import { ToolRegistryManager } from "../managers/toolRegistryManager";
 import { buildToolCsp, type CspExceptions } from "../utils/csp";
 import { connectionTargetLabel, normalizeConnectionTarget, resolveConnectionSlots, type ConnectionIds, type ConnectionTarget, type ToolConnectionFeatures } from "../utils/connectionSlots";
+import { createImpersonationPickerItems, formatConnectionStatus, resolveImpersonationPickerSelection, type ImpersonationPickerItem } from "../utils/impersonation";
 import { logger } from "../utils/logger";
 
 type ApiMessage = {
@@ -299,6 +300,7 @@ export class ToolPanel {
     private async configureImpersonation(enabled: boolean): Promise<void> {
         for (const index of Object.keys(this.impersonatedUsers)) delete this.impersonatedUsers[Number(index)];
         this.updateImpersonationBanner();
+        this.updateConnectionStatusBar();
         if (!enabled || !this.connectionsManager) {
             return;
         }
@@ -310,6 +312,7 @@ export class ToolPanel {
             if (user) this.impersonatedUsers[index] = user;
         }
         this.updateImpersonationBanner();
+        this.updateConnectionStatusBar();
     }
 
     private static async promptConnectionSlots(connectionsManager: ConnectionsManager, range: { min: number; max: number }, activeConnectionId?: string, requirePowerPlatformApi = false): Promise<ConnectionIds | undefined> {
@@ -370,19 +373,19 @@ export class ToolPanel {
         return ids;
     }
 
-    private static async promptImpersonationUser(dataverseManager: DataverseManager | undefined, connection: Connection, target: number): Promise<DataverseUser | undefined> {
+    private static async promptImpersonationUser(dataverseManager: DataverseManager | undefined, connection: Connection, target: number): Promise<DataverseUser | null | undefined> {
         if (!dataverseManager) {
             return undefined;
         }
 
-        type UserPickItem = vscode.QuickPickItem & { user?: DataverseUser; loadMore?: boolean };
+        type UserPickItem = vscode.QuickPickItem & ImpersonationPickerItem<DataverseUser>;
         const quickPick = vscode.window.createQuickPick<UserPickItem>();
         quickPick.title = `Impersonation (Slot ${target + 1}) - ${connection.name}`;
         quickPick.placeholder = "Type a name or email to search Dataverse users";
         quickPick.matchOnDescription = true;
         quickPick.matchOnDetail = true;
 
-        return new Promise((resolve) => {
+        return new Promise<DataverseUser | null | undefined>((resolve) => {
             let users: DataverseUser[] = [];
             let nextLink: string | null = null;
             let currentSearch = "";
@@ -390,7 +393,7 @@ export class ToolPanel {
             let debounce: ReturnType<typeof setTimeout> | undefined;
             let resolved = false;
 
-            const finish = (user?: DataverseUser): void => {
+            const finish = (user?: DataverseUser | null): void => {
                 if (resolved) return;
                 resolved = true;
                 if (debounce) clearTimeout(debounce);
@@ -399,16 +402,7 @@ export class ToolPanel {
             };
 
             const updateItems = (): void => {
-                const items: UserPickItem[] = users.map((user) => ({
-                    label: user.fullname,
-                    description: user.internalemailaddress ?? user.domainname ?? user.azureactivedirectoryobjectid,
-                    detail: user.systemuserid,
-                    user,
-                }));
-                if (nextLink) {
-                    items.push({ label: "$(more) Load more users", description: "Fetch the next page of matching users", loadMore: true, alwaysShow: true });
-                }
-                quickPick.items = items;
+                quickPick.items = createImpersonationPickerItems(users, Boolean(nextLink));
             };
 
             const loadUsers = async (search: string, append: boolean, cursor?: string): Promise<void> => {
@@ -434,7 +428,7 @@ export class ToolPanel {
                 } catch (error: unknown) {
                     if (resolved || activeRequestId !== requestId) return;
                     const message = error instanceof Error ? error.message : String(error);
-                    quickPick.items = [{ label: "Could not load users", description: message }];
+                    quickPick.items = createImpersonationPickerItems(users, false, message);
                     quickPick.placeholder = "Change the search text to try again";
                 } finally {
                     if (activeRequestId === requestId) quickPick.busy = false;
@@ -447,12 +441,12 @@ export class ToolPanel {
             });
 
             quickPick.onDidAccept((): void => {
-                const selected = quickPick.selectedItems[0];
-                if (selected?.user) {
-                    finish(selected.user);
-                    return;
-                }
-                if (selected?.loadMore && nextLink) {
+                const selection = resolveImpersonationPickerSelection(quickPick.selectedItems[0], Boolean(nextLink));
+                if (selection.type === "user") {
+                    finish(selection.user);
+                } else if (selection.type === "skip") {
+                    finish(null);
+                } else if (selection.type === "loadMore" && nextLink) {
                     void loadUsers(currentSearch, true, nextLink);
                 }
             });
@@ -1202,15 +1196,19 @@ export class ToolPanel {
             return;
         }
 
-        const assigned = Array.from({ length: this.connectionSlots.max }, (_, index) => {
+        const slots = Array.from({ length: this.connectionSlots.max }, (_, index) => {
             const id = this.toolContext.connectionIds?.[index] ?? null;
             const connection = id ? this.connectionsManager!.getById(id) : undefined;
-            const impersonated = this.impersonatedUsers[index]?.fullname;
-            return `${connectionTargetLabel(index)}: ${connection?.name ?? "Not set"}${impersonated ? ` (impersonating ${impersonated})` : ""}`;
+            return {
+                index,
+                connectionId: id,
+                connectionName: connection?.name,
+                impersonatedUserName: this.impersonatedUsers[index]?.fullname,
+            };
         });
-        const selected = (this.toolContext.connectionIds ?? []).filter(Boolean).length;
-        statusBar.text = `$(database) Connections: ${selected}/${this.connectionSlots.max}`;
-        statusBar.tooltip = `${assigned.join("\n")}\nClick to manage this tool's connection slots`;
+        const summary = formatConnectionStatus(slots, this.connectionSlots.max);
+        statusBar.text = summary.text;
+        statusBar.tooltip = summary.tooltip;
         statusBar.show();
     }
 
@@ -1228,7 +1226,7 @@ export class ToolPanel {
             };
         });
         const impersonationItems = (this.toolContext.connectionIds ?? []).flatMap((id, index) => id ? [{
-            label: `$(person) ${connectionTargetLabel(index)} impersonation: ${this.impersonatedUsers[index]?.fullname ?? "Off"}`,
+            label: `$(person) ${connectionTargetLabel(index)} impersonation: ${this.impersonatedUsers[index]?.fullname ?? "No impersonation"}`,
             description: `Manage Dataverse impersonation for ${connectionTargetLabel(index)}`,
             slotIndex: index,
             impersonation: true as const,
@@ -1261,8 +1259,10 @@ export class ToolPanel {
             else if (action === "Set or change impersonated user") {
                 const user = await ToolPanel.promptImpersonationUser(this.dataverseManager, connection, index);
                 if (user) this.impersonatedUsers[index] = user;
+                else if (user === null) delete this.impersonatedUsers[index];
             } else return;
             this.updateImpersonationBanner();
+            this.updateConnectionStatusBar();
             return;
         }
         const currentId = this.toolContext.connectionIds?.[index] ?? null;
