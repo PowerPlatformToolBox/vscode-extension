@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import * as vscode from "vscode";
 import type { CspExceptions } from "../utils/csp";
+import { parseConnectionsFeature, parseToolConnectionFeatures, type ToolConnectionFeatures } from "../utils/connectionSlots";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,8 @@ export interface RegistryTool {
     categories?: string[];
     multiConnection?: "required" | "optional" | "none";
     connectionRequirement?: "required" | "optional";
+    connections?: ToolConnectionFeatures["connections"];
+    features?: ToolConnectionFeatures;
     enabledForPowerPlatformAPI?: boolean;
     mcpEnabled?: boolean;
     maturityStatus?: string;
@@ -171,7 +174,7 @@ export class ToolRegistryManager {
         // have data to work with. Fall back to a plain query when either relation isn't
         // configured in this Supabase project so those features simply degrade to "no data".
         const catalogColumns =
-            "id, packagename, name, description, website, repository, status, created_at, version, download, icon, readme_url, license, csp_exceptions, min_api, max_api, multi_connection, connection_requirement, enabled_for_power_platform_api, mcp_enabled, maturity_status, tool_analytics(downloads,rating,mau), tool_categories(categories(name)), tool_contributors(contributors(name))";
+            "id, packagename, name, description, website, repository, status, created_at, version, download, icon, readme_url, license, csp_exceptions, min_api, max_api, multi_connection, connection_requirement, connections, enabled_for_power_platform_api, mcp_enabled, maturity_status, tool_analytics(downloads,rating,mau), tool_categories(categories(name)), tool_contributors(contributors(name))";
         let columns = catalogColumns;
         let { data, error, count } = await buildQuery(columns);
         if (error) {
@@ -526,6 +529,7 @@ function mapRow(row: Record<string, unknown>): RegistryTool {
     const analytics = parseAnalyticsFromRecord(row);
     const multiConnection = row["multi_connection"];
     const connectionRequirement = row["connection_requirement"];
+    const connections = parseConnectionsFeature(row["connections"]);
 
     return {
         id: str(row["id"]) ?? "",
@@ -541,6 +545,16 @@ function mapRow(row: Record<string, unknown>): RegistryTool {
         categories: parseCategoriesFromRecord(row),
         multiConnection: multiConnection === "required" || multiConnection === "optional" || multiConnection === "none" ? multiConnection : undefined,
         connectionRequirement: connectionRequirement === "required" || connectionRequirement === "optional" ? connectionRequirement : undefined,
+        connections,
+        features: parseToolConnectionFeatures({
+            ...(connections !== undefined
+                ? { connections }
+                : {
+                      multiConnection: multiConnection === "required" || multiConnection === "optional" || multiConnection === "none" ? multiConnection : undefined,
+                      connectionRequirement: connectionRequirement === "required" || connectionRequirement === "optional" ? connectionRequirement : undefined,
+                  }),
+            enabledForPowerPlatformAPI: row["enabled_for_power_platform_api"],
+        }),
         enabledForPowerPlatformAPI: typeof row["enabled_for_power_platform_api"] === "boolean" ? row["enabled_for_power_platform_api"] : undefined,
         mcpEnabled: typeof row["mcp_enabled"] === "boolean" ? row["mcp_enabled"] : undefined,
         maturityStatus,

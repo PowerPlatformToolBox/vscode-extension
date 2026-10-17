@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.1.0
+
+### Minor Changes
+
+- 9c42dc2: added approval before release
+- a91288b: Added impersonation at tool launch
+
+### Patch Changes
+
+- c063821: Add development-branch CI and automated Changesets-based releases.
+- 334534c: Add per-tool Dataverse user impersonation for primary and secondary connections.
+
 ## 0.1.0-preview.1 - 2026-07-24
 
 ### Added

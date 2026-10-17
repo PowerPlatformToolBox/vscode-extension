@@ -5,6 +5,7 @@ import { ConnectionsManager } from "./managers/connectionsManager";
 import { CspConsentManager } from "./managers/cspConsentManager";
 import { DataverseManager } from "./managers/dataverseManager";
 import { IconCacheManager } from "./managers/iconCacheManager";
+import { PowerPlatformManager } from "./managers/powerPlatformManager";
 import { ToolManager } from "./managers/toolManager";
 import { ToolRegistryManager } from "./managers/toolRegistryManager";
 import { ConnectionsTreeDataProvider } from "./providers/connectionsTreeDataProvider";
@@ -22,6 +23,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const authManager = new AuthManager(context, browserManager);
     const connectionsManager = new ConnectionsManager(context);
     const dataverseManager = new DataverseManager(authManager);
+    const powerPlatformManager = new PowerPlatformManager(authManager);
 
     // Wire up cross-manager references (lazy to avoid circular dependency)
     connectionsManager.setDataverseManager(dataverseManager);
@@ -68,7 +70,7 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar,
         ...registerConnectionCommands(context, authManager, connectionsManager, treeDataProvider, browserManager),
         ...registerSupportCommands(),
-        ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager),
+        ...registerToolCommands(context, toolManager, toolRegistryManager, connectionsManager, dataverseManager, installedToolsProvider, marketplaceProvider, iconCacheManager, cspConsentManager, powerPlatformManager),
     );
 
     // ── Warm up icon cache in background ─────────────────────────────────────

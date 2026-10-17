@@ -17,8 +17,8 @@ Thank you for your interest in contributing! This guide explains how to set up y
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) 20 or higher
-- [npm](https://www.npmjs.com/) 10 or higher
+- [Node.js](https://nodejs.org/) 24 or higher
+- [pnpm](https://pnpm.io/) 11.0.0
 - [VS Code](https://code.visualstudio.com/) 1.85.0 or higher
 
 ## Development Setup
@@ -33,7 +33,7 @@ Thank you for your interest in contributing! This guide explains how to set up y
 2. Install dependencies:
 
     ```bash
-    npm install
+    pnpm install --frozen-lockfile
     ```
 
 3. Copy the environment template and fill in your values:
@@ -80,24 +80,24 @@ dist/                     # Compiled output (generated)
 
 ```bash
 # Development build (incremental)
-npm run compile
+pnpm compile
 
 # Watch mode (rebuilds on save)
-npm run watch
+pnpm watch
 
 # Production build
-npm run package
+pnpm package
 
 # Run ESLint
-npm run lint
+pnpm lint
 
 # Format with Prettier
-npm run format
+pnpm format
 ```
 
 ## Pull Request Guidelines
 
-1. Create a feature branch from `main`:
+1. Create a feature branch from `dev`:
 
     ```bash
     git checkout -b feat/my-feature
@@ -112,25 +112,36 @@ npm run format
 3. Ensure the following pass before opening a PR:
 
     ```bash
-    npm run lint
-    npm run package
+    pnpm lint
+    pnpm package
     ```
 
-4. Open a PR against `main` with a clear title and description of the changes.
+4. Add a Changeset with `pnpm changeset` and commit its generated file in `.changeset/`.
+5. Open a PR against `dev` with a clear title and description of the changes.
 
 ## Releasing
 
-Releases are automated via GitHub Actions. To trigger a release:
+Releases use GitHub Actions and Changesets, with repository-owner approval required before publishing.
 
-1. Update the `version` field in `package.json`.
-2. Commit the version bump and push to `main`.
-3. Create and push a tag matching the new version:
-    ```bash
-    git tag v0.2.0
-    git push origin v0.2.0
-    ```
+### One-Time Repository Setup
 
-The release workflow will automatically build, package, and publish the extension to the VS Code Marketplace.
+Before enabling releases, a repository administrator must configure the approval gate in GitHub. Declaring an environment in workflow YAML does not configure required reviewers; without the following protection rules, publishing will not wait for approval.
+
+1. In **Settings > Environments**, create an environment named `vscode-marketplace`.
+2. Under **Deployment protection rules**, enable **Required reviewers** and select only the repository owner (or the owner-designated release approver for an organization-owned repository). GitHub requires only one listed reviewer to approve, so do not add other reviewers unless they should also be allowed to authorize releases.
+3. Enable **Prevent self-review** and disable **Allow administrators to bypass configured protection rules**. The approver must be different from the user who triggered the workflow.
+4. Under **Deployment branches and tags**, choose **Selected branches and tags** and allow only the `main` branch.
+5. Add `VSCE_PAT` as an **environment secret** on `vscode-marketplace`. Use a Marketplace publishing token authorized for the `PowerPlatformToolBox` publisher. Remove any repository-level copy of `VSCE_PAT` so the publishing credential is available only to jobs using the protected environment.
+6. Configure `CHANGESETS_GITHUB_TOKEN` as a repository secret with permission to create version PRs and GitHub releases. Configure `PPTB_SUPABASE_URL` and `PPTB_SUPABASE_ANON_KEY` as repository secrets or as secrets on the publishing environment for the production build.
+
+Required environment reviewers must be supported by the repository's visibility and GitHub plan. Do not enable Marketplace publishing until the protection rules are active.
+
+### Release Process
+
+1. Merge changes with Changesets from `dev` to `main`. The release workflow creates or updates a `Version Packages` PR.
+2. Review and merge the version PR. When Changesets selects publish mode, the **Approve and Publish VS Code Extension** job waits for approval on the `vscode-marketplace` environment before any of its steps run.
+3. The repository owner opens the workflow run in **Actions**, selects **Review deployments**, and approves the `vscode-marketplace` deployment. Rejecting the deployment prevents publishing.
+4. After approval, the job builds and packages the extension, publishes the VSIX to the VS Code Marketplace, and creates a GitHub Release containing the same VSIX. Build and publishing failures fail the job; a GitHub Release is created only after Marketplace publishing succeeds.
 
 ## Reporting Issues
 

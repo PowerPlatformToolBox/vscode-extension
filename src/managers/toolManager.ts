@@ -6,6 +6,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { FAVORITE_TOOLS_KEY } from "../constants";
 import { normalizeCspExceptions, type CspExceptions } from "../utils/csp";
+import { parseToolConnectionFeatures, type ToolConnectionFeatures } from "../utils/connectionSlots";
 import { logger } from "../utils/logger";
 import { parseContributorsFromRecord, str } from "./toolRegistryManager";
 
@@ -44,6 +45,7 @@ export interface Tool {
     repository?: string;
     /** Declared CSP exceptions requiring user consent before being applied to the tool's webview. */
     cspExceptions?: CspExceptions;
+    features?: ToolConnectionFeatures;
     multiConnection?: "required" | "optional" | "none";
     connectionRequirement?: "required" | "optional";
     enabledForPowerPlatformAPI?: boolean;
@@ -222,6 +224,7 @@ export class ToolManager implements vscode.Disposable {
         const contributors = parseContributorsFromRecord(merged) ?? tool.contributors;
         const isVerified = str(merged["maturityStatus"])?.toLowerCase() === "verified" || Boolean(tool.isVerified);
         const publisher = (pkg && str(pkg["publisher"])) ?? tool.publisher ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
+        const packageFeatures = parseToolConnectionFeatures(pkg?.["features"]);
 
         return {
             ...tool,
@@ -234,6 +237,9 @@ export class ToolManager implements vscode.Disposable {
             categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
             repository: parseRepositoryFromPackage(pkg) ?? tool.repository,
             cspExceptions: normalizeCspExceptions(pkg?.["cspExceptions"]) ?? tool.cspExceptions,
+            features: packageFeatures ?? tool.features,
+            multiConnection: packageFeatures?.connections !== undefined ? undefined : tool.multiConnection,
+            connectionRequirement: packageFeatures?.connections !== undefined ? undefined : tool.connectionRequirement,
         };
     }
 
@@ -317,6 +323,7 @@ export class ToolManager implements vscode.Disposable {
         const contributors = parseContributorsFromRecord(merged) ?? tool.contributors;
         const isVerified = str(merged["maturityStatus"])?.toLowerCase() === "verified" || Boolean(tool.isVerified);
         const publisher = (pkg && str(pkg["publisher"])) ?? tool.publisher ?? (typeof contributors === "string" ? contributors : Array.isArray(contributors) ? contributors[0] : undefined);
+        const packageFeatures = parseToolConnectionFeatures(pkg?.["features"]);
 
         const installed: InstalledTool = {
             ...tool,
@@ -326,6 +333,9 @@ export class ToolManager implements vscode.Disposable {
             description: (pkg && str(pkg["description"])) ?? tool.description,
             version: (pkg && str(pkg["version"])) ?? tool.version,
             categories: parseCategoriesFromPackage(pkg) ?? tool.categories,
+            features: packageFeatures ?? tool.features,
+            multiConnection: packageFeatures?.connections !== undefined ? undefined : tool.multiConnection,
+            connectionRequirement: packageFeatures?.connections !== undefined ? undefined : tool.connectionRequirement,
             repository: parseRepositoryFromPackage(pkg) ?? tool.repository,
             installedAt: new Date().toISOString(),
             toolPath: toolDir,

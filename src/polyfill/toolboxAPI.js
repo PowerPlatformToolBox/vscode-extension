@@ -12,6 +12,8 @@
     let requestCounter = 0;
     let cachedContext = window.TOOLBOX_CONTEXT || null;
 
+    window.TOOLBOX_FEATURES = window.TOOLBOX_FEATURES || {};
+
     const POWER_PLATFORM_CATEGORIES = [
         "Analytics",
         "AppManagement",
@@ -213,6 +215,12 @@
         },
 
         connections: {
+            getConnections() {
+                return invoke("connections", "getConnections", []);
+            },
+            getConnection(connectionTarget = "primary") {
+                return invoke("connections", "getConnection", [connectionTarget]);
+            },
             getActiveConnection() {
                 return invoke("connections", "getActiveConnection", []);
             },
