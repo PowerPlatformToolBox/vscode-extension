@@ -17,14 +17,53 @@ jobs:
             contents: read
         outputs:
             mode: ${{ steps.select.outputs.mode }}
+            version: ${{ steps.select.outputs.version }}
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+
+            - name: Set up pnpm
+              uses: pnpm/action-setup@v4
+              with:
+                  version: 11.0.0
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24.x"
+                  cache: "pnpm"
+
+            # select-mode resolves @changesets/cli from the repo's node_modules.
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Detect pending changesets
+              id: changesets
+              uses: changesets/action/select-mode@v2
+
+            # Changesets' "publish" mode checks the npm registry, where this extension is never
+            # published, so it always reports the current version as unpublished. Use the git tag
+            # created by the publish job as the source of truth instead.
             - name: Select release mode
               id: select
-              uses: changesets/action/select-mode@v2
+              env:
+                  CHANGESETS_MODE: ${{ steps.changesets.outputs.mode }}
+              run: |
+                  VERSION="$(node -p "require('./package.json').version")"
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+                  if [ "$CHANGESETS_MODE" = "version" ]; then
+                      MODE=version
+                  elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+                      echo "Tag v$VERSION already exists; nothing to publish."
+                      MODE=none
+                  else
+                      MODE=publish
+                  fi
+
+                  echo "Release mode: $MODE (version $VERSION)"
+                  echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
     version:
         name: Create or Update Version PR
@@ -68,6 +107,9 @@ jobs:
             url: https://marketplace.visualstudio.com/items?itemName=PowerPlatformToolBox.power-platform-toolbox
         permissions:
             contents: write
+        env:
+            VERSION: ${{ needs.select-release-mode.outputs.version }}
+            VSIX_PATH: power-platform-toolbox-${{ needs.select-release-mode.outputs.version }}.vsix
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
@@ -81,29 +123,51 @@ jobs:
               with:
                   node-version: "24.x"
                   cache: "pnpm"
+
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
+
+            - name: Verify required secrets
+              env:
+                  PPTB_SUPABASE_URL: ${{ secrets.PPTB_SUPABASE_URL }}
+                  PPTB_SUPABASE_ANON_KEY: ${{ secrets.PPTB_SUPABASE_ANON_KEY }}
+                  VSCE_PAT: ${{ secrets.VSCE_PAT }}
+              run: |
+                  missing=0
+                  [ -n "$PPTB_SUPABASE_URL" ] || { echo "::error::Missing required secret: PPTB_SUPABASE_URL"; missing=1; }
+                  [ -n "$PPTB_SUPABASE_ANON_KEY" ] || { echo "::error::Missing required secret: PPTB_SUPABASE_ANON_KEY"; missing=1; }
+                  [ -n "$VSCE_PAT" ] || { echo "::error::Missing required secret: VSCE_PAT"; missing=1; }
+                  exit $missing
+
+            - name: Verify package version
+              run: |
+                  PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+                  if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+                      echo "::error::package.json version ($PACKAGE_VERSION) does not match selected release version ($VERSION)"
+                      exit 1
+                  fi
+
             - name: Production build
               run: pnpm package
               env:
                   PPTB_SUPABASE_URL: ${{ secrets.PPTB_SUPABASE_URL }}
                   PPTB_SUPABASE_ANON_KEY: ${{ secrets.PPTB_SUPABASE_ANON_KEY }}
+
             - name: Package VSIX
-              run: pnpm exec vsce package --no-dependencies
-              env:
-                  PPTB_SUPABASE_URL: ${{ secrets.PPTB_SUPABASE_URL }}
-                  PPTB_SUPABASE_ANON_KEY: ${{ secrets.PPTB_SUPABASE_ANON_KEY }}
+              run: pnpm exec vsce package --no-dependencies --out "$VSIX_PATH"
+
+            # --skip-duplicate lets a re-run succeed if the Marketplace publish already went through
+            # but a later step (e.g. the GitHub Release) failed.
             - name: Publish to VS Code Marketplace
-              run: pnpm exec vsce publish --no-dependencies --packagePath *.vsix
+              run: pnpm exec vsce publish --packagePath "$VSIX_PATH" --skip-duplicate
               env:
                   VSCE_PAT: ${{ secrets.VSCE_PAT }}
-            - name: Get package version
-              id: package-version
-              run: echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: v${{ steps.package-version.outputs.version }}
-                  name: Release v${{ steps.package-version.outputs.version }}
-                  files: "*.vsix"
+                  tag_name: v${{ env.VERSION }}
+                  target_commitish: ${{ github.sha }}
+                  name: Release v${{ env.VERSION }}
+                  files: ${{ env.VSIX_PATH }}
                   generate_release_notes: true
