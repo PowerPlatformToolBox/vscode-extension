@@ -37,8 +37,7 @@ jobs:
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
+
             - name: Set up pnpm
               uses: pnpm/action-setup@v4
               with:
@@ -48,12 +47,13 @@ jobs:
               with:
                   node-version: "24.x"
                   cache: "pnpm"
+
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
+
             - name: Create or update version PR
               uses: changesets/action/version@v2
               with:
-                  github-token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
                   script: pnpm run release:version
                   pr-title: Version Packages
                   commit-message: Version Packages
@@ -71,8 +71,7 @@ jobs:
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
+
             - name: Set up pnpm
               uses: pnpm/action-setup@v4
               with:
@@ -104,7 +103,6 @@ jobs:
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v2
               with:
-                  token: ${{ secrets.CHANGESETS_GITHUB_TOKEN }}
                   tag_name: v${{ steps.package-version.outputs.version }}
                   name: Release v${{ steps.package-version.outputs.version }}
                   files: "*.vsix"
