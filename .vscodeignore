@@ -19,3 +19,5 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 **/*.ts
 **/*.map
+test/**
+pnpm-workspace.yaml
